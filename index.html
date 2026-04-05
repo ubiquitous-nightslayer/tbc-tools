@@ -2720,7 +2720,7 @@ function getGuildConfig() {
     guildName: '',
     server: '',
     faction: '',
-    wclToken: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiJhMTc3NTM4YS1mODFlLTRjYzgtOGVjYi1hNDQyMjhhYTY3NDMiLCJqdGkiOiI2MjI4NjA5ZTQzZmU5OGNlYTBkOGNjMTE2ODkyMGJmMzE0NGYwNTYzMGNmOWJhOTQwYjJlOWY1NGU5ODZlODI0YjYxMDhhNDg4YzAxYmE1ZiIsImlhdCI6MTc3NTMzODc3OC4yMTU0NjUsIm5iZiI6MTc3NTMzODc3OC4yMTU0NjcsImV4cCI6MTgwNjQ0Mjc3OC4yMDQ2NzksInN1YiI6IiIsInNjb3BlcyI6WyJ2aWV3LXVzZXItcHJvZmlsZSIsInZpZXctcHJpdmF0ZS1yZXBvcnRzIl19.w98Bm2Bbt2m8JqRcYMZsCxItdCQ1LFRQNhrnz3lMXc-1EigzuN5OyPpp9wb6B00jKAiVfwDR9FVyWTOAhrE3Cbt7LAVS-9jW7MhluCcoce6vQOAxkrhm6usfvnpQcTxCOG1ghWrAUrcxHo8ugoPn9L-bxHcsq1uqGs-ZDh0HCfhJ1iZYUgvd0mk0_XEs_yeRt1FG4fQOHYOcUlzXxJ7QL3f8H6G9Ihd5JvLEVgioRNwBsnVMtTLF1k9s8p2XwSzwbn53kcEsOKfXntndNEoY8IeavTuoMue9gYpLH5YY71C5pGP6lwwryD66CGFwhQ2cGE0an_OJa01sIkhmNLyxBjkPZyeaFiRb2ALWWoea0yiEcr_W0zbnHFJNYmxfZCY0Cm3kuaQY-UnoorGe-zcKlecWmtPkHJ1ZcbPnDz0Ej9S-IJpDcV8QBaqWL0oNAmYvWDsEE1sJGQCwMja_uPPIty4N_E9bxB3DzzVPXR4kasI7VkH9-vSPeFQ9JzW3Lq6LnkleuUdCdItreNO22ZAXuB5eO6En7zCsemWB-jV3QmY84uCClUP6qJSMcjZ4vSA7VDLdALUPd3YLdVucu1Mmx2wqEfqhHfeGUx5q-IoKQX0WP_FqHmP1NuTV--lsYLEN73mDgHVk7rm_-oCrSWNv6Ogl2LUbMHsTxJatS-FlV0Q'
+    wclToken: ''
   };
   try {
     var saved = JSON.parse(localStorage.getItem('ubiq_guild_config') || '{}');
@@ -2969,6 +2969,8 @@ function openGuildSettings() {
     el = document.getElementById('cfgWclClientSecret'); if (el) cfg.wclClientSecret = el.value;
     el = document.getElementById('cfgWclUserToken'); if (el && el.value) cfg.wclUserToken = el.value;
     el = document.getElementById('cfgWclToken'); if (el) cfg.wclToken = el.value;
+    // Persist immediately so generateWCLToken and other functions can read values
+    saveGuildConfig(cfg);
   };
 
   window._renderSetup();
