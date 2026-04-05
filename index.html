@@ -2743,148 +2743,118 @@ function openGuildSettings() {
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(5,5,20,0.95);z-index:1000;display:flex;align-items:center;justify-content:center';
 
   var modal = document.createElement('div');
-  modal.style.cssText = 'background:#14142a;border:2px solid var(--neon-cyan);width:620px;max-width:95vw;display:flex;flex-direction:column';
+  modal.style.cssText = 'background:#14142a;border:2px solid var(--neon-cyan);width:620px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column';
 
   window._setupMode = ''; // 'gm' or 'officer'
   window._currentStep = 0;
 
-  // GM steps
+  // GM steps — 6 focused steps
   var gmSteps = [
-    // GM Step 1 — Guild Name
+    // GM Step 1 — Guild Name + Server
     function() {
       return '<div style="padding:30px">' +
-        '<div style="font-family:Orbitron,sans-serif;font-size:14px;font-weight:900;color:var(--neon-cyan);letter-spacing:3px;margin-bottom:6px">GM SETUP — STEP 1 OF 4</div>' +
+        '<div style="font-family:Orbitron,sans-serif;font-size:14px;font-weight:900;color:var(--neon-cyan);letter-spacing:3px;margin-bottom:6px">GM SETUP \u2014 STEP 1 OF 6</div>' +
         '<div style="font-size:26px;font-weight:900;color:#fff;margin-bottom:20px">What is your guild called?</div>' +
         '<input id="cfgGuildName" type="text" style="width:100%;font-size:28px;font-weight:900;font-family:Orbitron,sans-serif;background:#0c0c1a;border:3px solid var(--neon-cyan);color:var(--neon-cyan);padding:16px 20px;text-transform:uppercase;letter-spacing:3px;outline:none;box-sizing:border-box;margin-bottom:24px" placeholder="TYPE GUILD NAME" value="' + (cfg.guildName||'').replace(/"/g,'&quot;') + '">' +
         '<div style="font-size:24px;font-weight:900;color:#fff;margin-bottom:12px">What server?</div>' +
         '<input id="cfgServer" type="text" style="width:100%;font-size:22px;font-weight:900;font-family:Rajdhani,sans-serif;background:#0c0c1a;border:3px solid #4a4a6a;color:var(--text-bright);padding:14px 20px;outline:none;box-sizing:border-box" placeholder="TYPE SERVER NAME" value="' + (cfg.server||'').replace(/"/g,'&quot;') + '">' +
       '</div>';
     },
-    // GM Step 2 — WCL
+
+    // GM Step 2 — WCL Guild ID
     function() {
       return '<div style="padding:30px">' +
-        '<div style="font-family:Orbitron,sans-serif;font-size:14px;font-weight:900;color:var(--neon-orange);letter-spacing:3px;margin-bottom:6px">GM SETUP — STEP 2 OF 4</div>' +
+        '<div style="font-family:Orbitron,sans-serif;font-size:14px;font-weight:900;color:var(--neon-orange);letter-spacing:3px;margin-bottom:6px">GM SETUP \u2014 STEP 2 OF 6</div>' +
         '<div style="font-size:24px;font-weight:900;color:#fff;margin-bottom:12px">WarcraftLogs Guild ID</div>' +
-        '<div style="font-size:16px;color:var(--text-bright);margin-bottom:14px">Go to <span style="font-weight:900;color:var(--neon-orange)">warcraftlogs.com</span> → find your guild → look at the URL:</div>' +
+        '<div style="font-size:16px;color:var(--text-bright);margin-bottom:14px;line-height:1.6">Go to <a href="https://www.warcraftlogs.com" target="_blank" style="color:var(--neon-orange);font-weight:900;text-decoration:underline">warcraftlogs.com</a> \u2192 find your guild \u2192 look at the URL:</div>' +
         '<div style="background:#0c0c1a;padding:14px;border:2px solid var(--neon-orange);font-family:Share Tech Mono,monospace;font-size:14px;color:#666;margin-bottom:14px;text-align:center">' +
-          'warcraftlogs.com/guild/id/<span style="color:#fff;background:var(--neon-orange);padding:4px 12px;font-size:22px;font-weight:900">802615</span>' +
+          'warcraftlogs.com/guild/id/<span style="color:#fff;background:var(--neon-orange);padding:4px 12px;font-size:22px;font-weight:900">YOUR NUMBER</span>' +
         '</div>' +
-        '<div style="font-size:18px;font-weight:900;color:#fff;margin-bottom:10px;text-align:center">👆 Copy that number. Paste it here 👇</div>' +
+        '<div style="font-size:18px;font-weight:900;color:#fff;margin-bottom:10px;text-align:center">\ud83d\udc46 Copy that number. Paste it here \ud83d\udc47</div>' +
         '<input id="cfgWclId" type="text" style="width:100%;font-size:32px;font-weight:900;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:3px solid var(--neon-orange);color:var(--neon-orange);padding:16px;text-align:center;letter-spacing:6px;outline:none;box-sizing:border-box" placeholder="PASTE NUMBER" value="' + (cfg.wclId||'') + '">' +
-        '<div style="font-size:13px;color:var(--text-sub);margin-top:8px;text-align:center">Don\'t use WarcraftLogs? Skip this.</div>' +
-
-          '<div style="border-top:2px solid #2a2a44;margin-top:18px;padding-top:14px">' +
-          '<div style="font-size:18px;font-weight:900;color:var(--neon-orange);margin-bottom:8px">WCL API Credentials (for auto-import)</div>' +
-          '<div style="font-size:13px;color:var(--text-sub);margin-bottom:10px;line-height:1.6">' +
-            'Go to <a href="https://www.warcraftlogs.com/api/clients/" target="_blank" style="color:var(--neon-orange);font-weight:900;text-decoration:underline">warcraftlogs.com/api/clients</a> → Create a new client → copy the ID and Secret' +
-          '</div>' +
-          '<div style="font-size:14px;font-weight:900;color:var(--text-bright);margin-bottom:4px">Client ID</div>' +
-          '<input id="cfgWclClientId" type="text" style="width:100%;font-size:14px;font-weight:900;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:2px solid var(--neon-orange);color:var(--neon-orange);padding:8px 12px;margin-bottom:8px;outline:none;box-sizing:border-box" placeholder="PASTE CLIENT ID" value="' + (cfg.wclClientId||'') + '">' +
-          '<div style="font-size:14px;font-weight:900;color:var(--text-bright);margin-bottom:4px">Client Secret</div>' +
-          '<input id="cfgWclClientSecret" type="password" style="width:100%;font-size:14px;font-weight:900;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:2px solid #4a4a3a;color:var(--neon-orange);padding:8px 12px;margin-bottom:8px;outline:none;box-sizing:border-box" placeholder="PASTE CLIENT SECRET" value="' + (cfg.wclClientSecret||'') + '">' +
-          '<button class="btn" style="font-size:12px;width:100%;padding:8px;border-color:var(--neon-orange);color:var(--neon-orange);font-weight:900" onclick="saveWizardInputs();generateWCLToken()">⚡ GENERATE TOKEN</button>' +
-          '<div style="font-size:14px;font-weight:900;color:var(--text-bright);margin:10px 0 4px">API Token (auto-filled or paste manually)</div>' +
-          '<div style="margin-bottom:16px;padding:14px;border:2px solid var(--neon-green);background:rgba(0,255,136,0.03)">' +
-          '<div style="font-family:Orbitron,sans-serif;font-size:12px;color:var(--neon-green);letter-spacing:1px;margin-bottom:10px">\ud83d\udd11 WCL USER TOKEN (unlocks archived reports)</div>' +
-          '<div style="font-size:11px;color:#888;margin-bottom:12px">Paid WCL subscribers can access archived reports for rank comparisons and combat logs. Follow these 3 steps:</div>' +
-
-          '<div style="background:#0a0a14;border:1px solid #2a2a44;padding:10px;margin-bottom:8px">' +
-          '<div style="font-weight:900;color:var(--neon-cyan);font-size:12px;margin-bottom:4px">STEP 1 \u2014 Add Redirect URI</div>' +
-          '<div style="font-size:11px;color:#aaa;margin-bottom:4px">Go to <span style="color:var(--neon-green);cursor:pointer" onclick="window.open(\'https://www.warcraftlogs.com/api/clients\')">warcraftlogs.com/api/clients</span> \u2192 edit your API client \u2192 add this as a redirect URI:</div>' +
-          '<div style="display:flex;gap:4px;align-items:center"><code style="flex:1;font-size:12px;color:var(--neon-green);background:#14141e;padding:6px 8px;border:1px solid #2a2a44;font-family:Share Tech Mono,monospace">' + (window.location.origin+window.location.pathname) + '</code>' +
-          '<button class="btn" style="font-size:10px;padding:3px 8px;border-color:var(--neon-green);color:var(--neon-green)" onclick="navigator.clipboard.writeText(window.location.origin+window.location.pathname);this.textContent=\'\u2705\';setTimeout(()=>this.textContent=\'COPY\',1000)">COPY</button></div>' +
-          '</div>' +
-
-          '<div style="background:#0a0a14;border:1px solid #2a2a44;padding:10px;margin-bottom:8px">' +
-          '<div style="font-weight:900;color:var(--neon-cyan);font-size:12px;margin-bottom:4px">STEP 2 \u2014 Authorize</div>' +
-          '<div style="font-size:11px;color:#aaa;margin-bottom:4px">Open this URL in your browser, authorize, then copy the <code style="color:var(--neon-orange)">code</code> from the URL bar after redirect:</div>' +
-          '<div style="display:flex;gap:4px;align-items:center"><code id="wclAuthUrl" style="flex:1;font-size:10px;color:var(--neon-orange);background:#14141e;padding:6px 8px;border:1px solid #2a2a44;font-family:Share Tech Mono,monospace;word-break:break-all">https://www.warcraftlogs.com/oauth/authorize?client_id=' + (cfg.wclClientId||'') + '&redirect_uri=' + encodeURIComponent(window.location.origin+window.location.pathname) + '&response_type=code</code>' +
-          '<button class="btn" style="font-size:10px;padding:3px 8px;border-color:var(--neon-orange);color:var(--neon-orange)" onclick="navigator.clipboard.writeText(document.getElementById(\'wclAuthUrl\').textContent);this.textContent=\'\u2705\';setTimeout(()=>this.textContent=\'COPY\',1000)">COPY</button>' +
-          '<button class="btn" style="font-size:10px;padding:3px 8px;border-color:var(--neon-cyan);color:var(--neon-cyan)" onclick="window.open(document.getElementById(\'wclAuthUrl\').textContent)">OPEN</button></div>' +
-          '</div>' +
-
-          '<div style="background:#0a0a14;border:1px solid #2a2a44;padding:10px;margin-bottom:8px">' +
-          '<div style="font-weight:900;color:var(--neon-cyan);font-size:12px;margin-bottom:4px">STEP 3 \u2014 Get Token</div>' +
-          '<div style="font-size:11px;color:#aaa;margin-bottom:4px">Paste the code from Step 2 below, then click GET TOKEN. Or run the curl command in terminal.</div>' +
-          '<div style="display:flex;gap:4px;align-items:center;margin-bottom:6px">' +
-          '<input id="wclOAuthCode" type="text" style="flex:1;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid var(--neon-orange);color:var(--neon-orange);padding:6px 8px;outline:none" placeholder="Paste the code from the URL here">' +
-          '<button class="btn primary" style="font-size:11px;padding:4px 12px" onclick="var code=document.getElementById(\'wclOAuthCode\').value;if(!code){toast(\'Paste the code first\');return;}var cfg2=getGuildConfig();fetch(\'https://www.warcraftlogs.com/oauth/token\',{method:\'POST\',headers:{\'Content-Type\':\'application/x-www-form-urlencoded\',\'Authorization\':\'Basic \'+btoa(cfg2.wclClientId+\':\'+cfg2.wclClientSecret)},body:\'grant_type=authorization_code&code=\'+encodeURIComponent(code)+\'&redirect_uri=' + encodeURIComponent(window.location.origin+window.location.pathname) + '\'}).then(function(r){return r.json()}).then(function(d){if(d.access_token){document.getElementById(\'cfgWclUserToken\').value=d.access_token;toast(\'\u2705 User token obtained! Click SAVE.\');}else{throw new Error(d.error_description||\'Failed\')}}).catch(function(e){toast(\'CORS blocked \u2014 use the curl command below\');var cmd=\'curl -X POST https://www.warcraftlogs.com/oauth/token -d \\x22grant_type=authorization_code&code=\'+code+\'&redirect_uri=' + encodeURIComponent(window.location.origin+window.location.pathname) + '&client_id=\'+cfg2.wclClientId+\'&client_secret=\'+cfg2.wclClientSecret+\'\\x22\';prompt(\'Run in terminal, paste access_token below:\',cmd)})">GET TOKEN</button></div>' +
-          '<div style="font-size:10px;color:#555">If CORS blocks the browser request, the curl command will appear \u2014 run it in terminal and paste the access_token below.</div>' +
-          '</div>' +
-
-          '<div style="font-weight:900;color:var(--neon-green);font-size:11px;margin-bottom:4px">USER ACCESS TOKEN</div>' +
-          '<input id="cfgWclUserToken" type="text" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:2px solid var(--neon-green);color:var(--neon-green);padding:8px 10px;outline:none;box-sizing:border-box" placeholder="Token appears here after Step 3 (or paste manually)" value="' + (cfg.wclUserToken||'') + '">' +
-          '</div>' +
-          '<input id="cfgWclToken" type="text" style="width:100%;font-size:12px;font-weight:700;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:2px solid #3a3a4a;color:var(--text-sub);padding:8px 12px;outline:none;box-sizing:border-box" placeholder="TOKEN GOES HERE" value="' + (cfg.wclToken||'') + '">' +
-          '</div>' +
-
+        '<div style="font-size:13px;color:var(--text-sub);margin-top:8px;text-align:center">Don\x27t use WarcraftLogs? Skip this step.</div>' +
       '</div>';
     },
-    // GM Step 3 — Create Gist
+
+    // GM Step 3 — WCL API Credentials
+    function() {
+      return '<div style="padding:30px">' +
+        '<div style="font-family:Orbitron,sans-serif;font-size:14px;font-weight:900;color:var(--neon-orange);letter-spacing:3px;margin-bottom:6px">GM SETUP \u2014 STEP 3 OF 6</div>' +
+        '<div style="font-size:24px;font-weight:900;color:#fff;margin-bottom:12px">WCL API Credentials</div>' +
+        '<div style="font-size:14px;color:var(--text-bright);margin-bottom:14px;line-height:1.6">' +
+          'Create an API client at <a href="https://www.warcraftlogs.com/api/clients/" target="_blank" style="color:var(--neon-orange);font-weight:900;text-decoration:underline">warcraftlogs.com/api/clients</a><br>' +
+          'Set redirect URI to: <code style="color:var(--neon-green);font-size:12px">' + (window.location.origin+window.location.pathname) + '</code> ' +
+          '<button class="btn" style="font-size:9px;padding:2px 6px;border-color:var(--neon-green);color:var(--neon-green)" onclick="navigator.clipboard.writeText(window.location.origin+window.location.pathname);this.textContent=\x27\u2705\x27;setTimeout(()=>this.textContent=\x27COPY\x27,1000)">COPY</button>' +
+        '</div>' +
+        '<div style="font-size:14px;font-weight:900;color:var(--text-bright);margin-bottom:4px">Client ID</div>' +
+        '<input id="cfgWclClientId" type="text" style="width:100%;font-size:16px;font-weight:900;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:2px solid var(--neon-orange);color:var(--neon-orange);padding:10px 14px;margin-bottom:12px;outline:none;box-sizing:border-box" placeholder="PASTE CLIENT ID" value="' + (cfg.wclClientId||'') + '">' +
+        '<div style="font-size:14px;font-weight:900;color:var(--text-bright);margin-bottom:4px">Client Secret</div>' +
+        '<input id="cfgWclClientSecret" type="password" style="width:100%;font-size:16px;font-weight:900;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:2px solid #4a4a3a;color:var(--neon-orange);padding:10px 14px;margin-bottom:12px;outline:none;box-sizing:border-box" placeholder="PASTE CLIENT SECRET" value="' + (cfg.wclClientSecret||'') + '">' +
+        '<button class="btn" style="font-size:14px;width:100%;padding:10px;border-color:var(--neon-orange);color:var(--neon-orange);font-weight:900" onclick="saveWizardInputs();generateWCLToken()">\u26a1 GENERATE API TOKEN</button>' +
+        '<div style="font-size:14px;font-weight:900;color:var(--text-bright);margin:12px 0 4px">API Token <span style="color:#666;font-size:11px">(auto-fills after clicking generate)</span></div>' +
+        '<input id="cfgWclToken" type="text" style="width:100%;font-size:12px;font-weight:700;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:2px solid #3a3a4a;color:var(--text-sub);padding:8px 12px;outline:none;box-sizing:border-box" placeholder="TOKEN GOES HERE" value="' + (cfg.wclToken||'') + '">' +
+      '</div>';
+    },
+
+    // GM Step 4 — WCL Premium Login (optional)
+    function() {
+      return '<div style="padding:30px">' +
+        '<div style="font-family:Orbitron,sans-serif;font-size:14px;font-weight:900;color:var(--neon-green);letter-spacing:3px;margin-bottom:6px">GM SETUP \u2014 STEP 4 OF 6 <span style="color:#666;font-size:11px">(OPTIONAL)</span></div>' +
+        '<div style="font-size:24px;font-weight:900;color:#fff;margin-bottom:8px">\ud83d\udd11 WCL Premium Login</div>' +
+        '<div style="font-size:14px;color:var(--text-sub);margin-bottom:16px">If you have a paid WCL subscription, this unlocks archived reports for rank comparisons and combat logs. Skip if you don\x27t have one.</div>' +
+        '<div style="font-size:14px;font-weight:900;color:var(--neon-green);margin-bottom:6px">\u2460 Authorize your WCL account</div>' +
+        '<button class="btn" style="font-size:13px;padding:8px 20px;border-color:var(--neon-green);color:var(--neon-green);font-weight:900;width:100%;margin-bottom:14px" onclick="var cid=(getGuildConfig().wclClientId||\x27\x27);if(!cid){toast(\x27Set Client ID in Step 3 first\x27);return;}window.open(\x27https://www.warcraftlogs.com/oauth/authorize?client_id=\x27+cid+\x27&redirect_uri=\x27+encodeURIComponent(window.location.origin+window.location.pathname)+\x27&response_type=code\x27)">\ud83d\udd10 OPEN WCL AUTH PAGE</button>' +
+        '<div style="font-size:14px;font-weight:900;color:var(--neon-green);margin-bottom:6px">\u2461 Paste the code from the URL</div>' +
+        '<div style="display:flex;gap:6px;margin-bottom:14px">' +
+        '<input id="wclOAuthCode" type="text" style="flex:1;font-size:14px;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:2px solid var(--neon-orange);color:var(--neon-orange);padding:8px 12px;outline:none" placeholder="Paste code here">' +
+        '<button class="btn primary" style="font-size:12px;padding:6px 16px" onclick="wclExchangeQuickCode()">GET TOKEN</button></div>' +
+        '<div style="font-size:14px;font-weight:900;color:var(--neon-green);margin-bottom:6px">\u2462 User Access Token</div>' +
+        '<input id="cfgWclUserToken" type="text" style="width:100%;font-size:14px;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:2px solid var(--neon-green);color:var(--neon-green);padding:8px 12px;outline:none;box-sizing:border-box" placeholder="Token appears here (or paste manually)" value="' + (cfg.wclUserToken||'') + '">' +
+        '<div style="font-size:11px;color:#555;margin-top:6px">No paid subscription? No problem \u2014 skip this step. You can always set it up later with the \ud83d\udd11 button in the header.</div>' +
+      '</div>';
+    },
+
+    // GM Step 5 — Create Gist
     function() {
       return '<div style="padding:24px">' +
-        '<div style="font-family:Orbitron,sans-serif;font-size:14px;font-weight:900;color:var(--neon-green);letter-spacing:3px;margin-bottom:6px">GM SETUP — STEP 3 OF 4</div>' +
-        '<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:16px">Create your Cloud Storage</div>' +
-
-        '<div style="background:#0c0c1a;border:2px solid var(--neon-green);padding:14px;margin-bottom:14px;text-align:center">' +
-          '<div style="font-size:16px;font-weight:900;color:var(--neon-green);margin-bottom:8px">First, open this link in a new tab:</div>' +
-          '<a href="https://gist.github.com" target="_blank" style="display:inline-block;font-size:18px;font-weight:900;color:#000;background:var(--neon-green);padding:12px 24px;text-decoration:none;border-radius:3px">👉 gist.github.com</a>' +
-          '<div style="font-size:12px;color:var(--text-sub);margin-top:6px">(Make a free GitHub account if needed)</div>' +
+        '<div style="font-family:Orbitron,sans-serif;font-size:14px;font-weight:900;color:var(--neon-green);letter-spacing:3px;margin-bottom:6px">GM SETUP \u2014 STEP 5 OF 6</div>' +
+        '<div style="font-size:24px;font-weight:900;color:#fff;margin-bottom:12px">Create a Save File (Gist)</div>' +
+        '<div style="font-size:16px;color:var(--text-bright);margin-bottom:16px;line-height:1.6">' +
+          'Your assignments are saved to a GitHub Gist (free cloud storage). You need a GitHub account.' +
         '</div>' +
-
-        '<div style="font-size:17px;color:var(--text-bright);line-height:2.2">' +
-          '<span style="font-weight:900;color:var(--neon-green);font-size:22px">①</span> In the filename box, paste this:' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;margin:4px 0 10px">' +
-          '<div style="flex:1;background:#0c0c1a;border:2px solid var(--neon-green);padding:10px 16px;font-family:Share Tech Mono,monospace;font-size:22px;font-weight:900;color:var(--neon-green);text-align:center">assignments.json</div>' +
-          '<button onclick="navigator.clipboard.writeText(\'assignments.json\');this.textContent=\'✅\';setTimeout(()=>this.textContent=\'📋\',1000)" style="font-size:24px;background:var(--neon-green);color:#000;border:none;padding:10px 16px;cursor:pointer;border-radius:3px;font-weight:900">📋</button>' +
-        '</div>' +
-
-        '<div style="font-size:17px;color:var(--text-bright);line-height:2.2">' +
-          '<span style="font-weight:900;color:var(--neon-green);font-size:22px">②</span> In the big text box, paste this:' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;margin:4px 0 10px">' +
-          '<div style="flex:1;background:#0c0c1a;border:2px solid var(--neon-green);padding:8px 16px;font-family:Share Tech Mono,monospace;font-size:36px;font-weight:900;color:var(--neon-green);text-align:center">{}</div>' +
-          '<button onclick="navigator.clipboard.writeText(\'{}\');this.textContent=\'✅\';setTimeout(()=>this.textContent=\'📋\',1000)" style="font-size:24px;background:var(--neon-green);color:#000;border:none;padding:10px 16px;cursor:pointer;border-radius:3px;font-weight:900">📋</button>' +
-        '</div>' +
-
-        '<div style="font-size:17px;color:var(--text-bright);line-height:2.2">' +
-          '<span style="font-weight:900;color:var(--neon-green);font-size:22px">③</span> Click <span style="background:var(--neon-green);color:#000;padding:3px 12px;font-weight:900;border-radius:3px">Create public gist</span>' +
+        '<a href="https://gist.github.com/" target="_blank" style="display:block;text-align:center;font-size:18px;font-weight:900;color:#000;background:var(--neon-green);padding:14px;text-decoration:none;border-radius:3px;margin-bottom:14px">\ud83d\udc49 OPEN GITHUB GIST \u2014 CLICK HERE</a>' +
+        '<div style="font-size:16px;color:var(--text-bright);line-height:2;margin-bottom:12px">' +
+          '<span style="font-weight:900;color:var(--neon-green);font-size:20px">\u2460</span> Click the green button above<br>' +
+          '<span style="font-weight:900;color:var(--neon-green);font-size:20px">\u2461</span> Title: <span style="font-weight:900;color:var(--neon-cyan)">TBC Assignments</span><br>' +
+          '<span style="font-weight:900;color:var(--neon-green);font-size:20px">\u2462</span> Type anything in the big box<br>' +
+          '<span style="font-weight:900;color:var(--neon-green);font-size:20px">\u2463</span> Click <span style="background:#2da44e;color:#fff;padding:3px 12px;font-weight:900;border-radius:4px">Create secret gist</span><br>' +
+          '<span style="font-weight:900;color:var(--neon-green);font-size:20px">\u2464</span> Copy the long code from the URL after /gist/' +
         '</div>' +
       '</div>';
     },
-    // GM Step 4 — Paste IDs + Token
+
+    // GM Step 6 — Paste Gist ID + Token
     function() {
       return '<div style="padding:24px">' +
-        '<div style="font-family:Orbitron,sans-serif;font-size:14px;font-weight:900;color:var(--neon-green);letter-spacing:3px;margin-bottom:6px">GM SETUP — STEP 4 OF 4</div>' +
-        '<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:16px">Paste your codes</div>' +
-
-        '<div style="background:#0c0c1a;border:2px solid var(--neon-green);padding:14px;margin-bottom:14px">' +
-          '<div style="font-size:18px;font-weight:900;color:var(--neon-green);margin-bottom:6px">YOUR GIST ID</div>' +
-          '<div style="font-size:13px;color:var(--text-sub);margin-bottom:6px">From the URL after creating your gist — the long code at the end</div>' +
-          '<input id="cfgGistId" type="text" style="width:100%;font-size:18px;font-weight:900;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:3px solid var(--neon-green);color:var(--neon-green);padding:12px 16px;outline:none;box-sizing:border-box" placeholder="PASTE GIST ID HERE" value="' + (cfg.gistId||'') + '">' +
+        '<div style="font-family:Orbitron,sans-serif;font-size:14px;font-weight:900;color:var(--neon-green);letter-spacing:3px;margin-bottom:6px">GM SETUP \u2014 STEP 6 OF 6</div>' +
+        '<div style="font-size:24px;font-weight:900;color:#fff;margin-bottom:12px">Paste Your Gist ID & Token</div>' +
+        '<div style="font-size:16px;font-weight:900;color:var(--text-bright);margin-bottom:6px">Gist ID</div>' +
+        '<div style="font-size:13px;color:var(--text-sub);margin-bottom:8px">The long code from the URL after /gist/username/</div>' +
+        '<input id="cfgGistId" type="text" style="width:100%;font-size:18px;font-weight:900;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:3px solid var(--neon-green);color:var(--neon-green);padding:14px 18px;letter-spacing:1px;outline:none;box-sizing:border-box;margin-bottom:16px" placeholder="PASTE GIST ID" value="' + (cfg.gistId||'') + '">' +
+        '<div style="font-size:16px;font-weight:900;color:var(--text-bright);margin-bottom:6px">Save Token</div>' +
+        '<div style="font-size:13px;color:var(--text-sub);margin-bottom:8px">Creates editing permission. Each person needs their own.</div>' +
+        '<a href="https://github.com/settings/tokens/new?scopes=gist&description=TBC+Assignments&expiration=" target="_blank" style="display:block;text-align:center;font-size:14px;font-weight:900;color:#000;background:var(--neon-green);padding:10px;text-decoration:none;border-radius:3px;margin-bottom:10px">\ud83d\udc49 CREATE TOKEN \u2014 CLICK HERE</a>' +
+        '<div style="font-size:14px;color:var(--text-bright);line-height:1.8;margin-bottom:10px">' +
+          '\u2460 Click button above \u2192 \u2461 Scroll down, click <span style="background:var(--neon-green);color:#000;padding:1px 8px;font-weight:900;border-radius:3px;font-size:12px">Generate token</span> \u2192 \u2462 Copy the <span style="font-weight:900;color:var(--neon-green)">ghp_</span> code' +
         '</div>' +
-
-        '<div style="background:#0c0c1a;border:2px solid var(--neon-orange);padding:14px;margin-bottom:14px">' +
-          '<div style="font-size:18px;font-weight:900;color:var(--neon-orange);margin-bottom:6px">YOUR SAVE TOKEN</div>' +
-          '<div style="font-size:13px;color:var(--text-sub);margin-bottom:6px">This lets you save. Click below to create one:</div>' +
-          '<a href="https://github.com/settings/tokens/new?scopes=gist&description=WoW+Raid+Assignments&expiration=" target="_blank" style="display:block;text-align:center;font-size:14px;font-weight:900;color:#000;background:var(--neon-green);padding:10px;text-decoration:none;border-radius:3px;margin-bottom:8px">👉 CREATE TOKEN — CLICK HERE</a>' +
-          '<div style="font-size:13px;color:var(--text-sub);margin-bottom:6px">Click "Generate token" → copy the <span style="font-weight:900;color:var(--neon-green)">ghp_</span> code → paste here:</div>' +
-          '<input id="cfgGistToken" type="password" style="width:100%;font-size:18px;font-weight:900;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:3px solid var(--neon-orange);color:var(--neon-orange);padding:12px 16px;outline:none;box-sizing:border-box" placeholder="PASTE TOKEN (ghp_...)" value="' + (cfg.gistToken||'') + '">' +
-          '<div style="font-size:11px;color:var(--text-sub);margin-top:4px">🔒 Stays in your browser only</div>' +
-        '</div>' +
-
-        '<button class="btn" style="font-size:14px;width:100%;padding:12px;border-color:var(--neon-green);color:var(--neon-green);font-weight:900;letter-spacing:2px" onclick="testGistConnection()">🔌 TEST CONNECTION</button>' +
-
-        '<div style="margin-top:14px;border:2px dashed var(--neon-cyan);padding:12px;text-align:center">' +
-          '<div style="font-size:15px;font-weight:900;color:var(--neon-cyan);margin-bottom:4px">AFTER FINISHING:</div>' +
-          '<div style="font-size:14px;color:var(--text-bright)">Click <span style="font-weight:900;color:var(--neon-cyan)">📤 SHARE</span> in the top bar to get the link for your officers and raiders</div>' +
-        '</div>' +
+        '<input id="cfgGistToken" type="password" style="width:100%;font-size:18px;font-weight:900;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:3px solid var(--neon-orange);color:var(--neon-orange);padding:14px 18px;outline:none;box-sizing:border-box;margin-bottom:10px" placeholder="PASTE TOKEN (ghp_...)" value="' + (cfg.gistToken||'') + '">' +
+        '<button class="btn" style="font-size:14px;width:100%;padding:10px;border-color:var(--neon-green);color:var(--neon-green);font-weight:900;letter-spacing:2px" onclick="testGistConnection()">\ud83d\udd0c TEST CONNECTION</button>' +
+        '<div style="font-size:12px;color:var(--text-sub);margin-top:8px;text-align:center">\ud83d\udd12 Token stays in YOUR browser only. Share the Gist ID with officers.</div>' +
       '</div>';
     },
   ];
 
-  // Officer steps
+    // Officer steps
   var officerSteps = [
     // Officer Step 1 — Paste Gist ID
     function() {
@@ -2983,7 +2953,7 @@ function openGuildSettings() {
       '</div>';
     }
 
-    modal.innerHTML = header + '<div id="wizardBody">' + body + '</div>' + footer;
+    modal.innerHTML = header + '<div id="wizardBody" style="overflow-y:auto;flex:1">' + body + '</div>' + footer;
   }
 
   window.saveWizardInputs = function() {
