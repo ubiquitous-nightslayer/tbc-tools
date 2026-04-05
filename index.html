@@ -577,7 +577,7 @@ function fetchRosterFromWCL(guildId, cb) {
   .then(function(d) {
     if (!d||!d.guildData||!d.guildData.guild) throw new Error('Guild not found');
     var g = d.guildData.guild;
-    var cm = {1:'Warrior',2:'Paladin',3:'Hunter',4:'Rogue',5:'Priest',7:'Shaman',8:'Mage',9:'Warlock',11:'Druid'};
+    var cm = {1:'Death Knight',2:'Druid',3:'Hunter',4:'Mage',5:'Monk',6:'Paladin',7:'Priest',8:'Rogue',9:'Shaman',10:'Warlock',11:'Warrior'};
     var roster = [];
     if (g.members&&g.members.data) g.members.data.forEach(function(m) { roster.push({name:m.name,cls:cm[m.classID]||'Unknown',spec:'',att:100}); });
     var cfg = getGuildConfig(); cfg.guildName = g.name||''; cfg.server = g.server?g.server.name:''; cfg.faction = g.faction?g.faction.name:'';
@@ -619,7 +619,7 @@ const CLASS_COLORS_MAP = {
 };
 
 function rosterSelect(value, onchange, placeholder, filterRole) {
-  var active = GUILD_ROSTER.filter(function(r) { return r.att >= 10; });
+  var active = GUILD_ROSTER.filter(function(r) { return (r.att === undefined || r.att >= 10); });
   if (filterRole) active = active.filter(function(r) { return r.role === filterRole; });
   // Sort by class then name
   active.sort(function(a,b) { return a.cls === b.cls ? a.name.localeCompare(b.name) : a.cls.localeCompare(b.cls); });
@@ -6486,9 +6486,32 @@ function toast(msg) {
 // ═══════════════════════════════════════════
 function init() {
   quickLoad();
+  loadShareLink();
   renderRaidTabs();
   renderBossTabs();
   renderBoss();
+  
+  // Always fetch fresh roster from WCL on load
+  var cfg = getGuildConfig();
+  var guildId = cfg.wclGuildId || cfg.wclId || '';
+  if (guildId && (cfg.wclToken || (cfg.wclClientId && cfg.wclClientSecret))) {
+    // Ensure we have a token first, then fetch roster
+    var doFetch = function() {
+      var token = getWclToken();
+      if (token) {
+        fetchRosterFromWCL(guildId, function(err) {
+          if (!err) renderBoss();
+        });
+      } else {
+        // Token generating async — retry in 3s
+        setTimeout(function() {
+          var t = getWclToken();
+          if (t) fetchRosterFromWCL(guildId, function(err) { if (!err) renderBoss(); });
+        }, 3000);
+      }
+    };
+    doFetch();
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -6679,7 +6702,7 @@ function debuffTypeSelect(value, onchange) {
 }
 
 function debuffPlayerSelect(value, debuffType, onchange) {
-  var active = GUILD_ROSTER.filter(function(r) { return r.att >= 10; });
+  var active = GUILD_ROSTER.filter(function(r) { return (r.att === undefined || r.att >= 10); });
   if (debuffType) {
     var dt = DEBUFF_TYPES.find(function(d){return d.type===debuffType;});
     if (dt) active = active.filter(function(r) { return dt.removers.indexOf(r.cls) !== -1; });
