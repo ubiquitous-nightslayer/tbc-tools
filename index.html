@@ -2843,9 +2843,12 @@ function openGuildSettings() {
         '<input id="cfgGistId" type="text" style="width:100%;font-size:18px;font-weight:900;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:3px solid var(--neon-green);color:var(--neon-green);padding:14px 18px;letter-spacing:1px;outline:none;box-sizing:border-box;margin-bottom:16px" placeholder="PASTE GIST ID" value="' + (cfg.gistId||'') + '">' +
         '<div style="font-size:16px;font-weight:900;color:var(--text-bright);margin-bottom:6px">Save Token</div>' +
         '<div style="font-size:13px;color:var(--text-sub);margin-bottom:8px">Creates editing permission. Each person needs their own.</div>' +
-        '<a href="https://github.com/settings/tokens/new?scopes=gist&description=TBC+Assignments&expiration=" target="_blank" style="display:block;text-align:center;font-size:14px;font-weight:900;color:#000;background:var(--neon-green);padding:10px;text-decoration:none;border-radius:3px;margin-bottom:10px">\ud83d\udc49 CREATE TOKEN \u2014 CLICK HERE</a>' +
+        '<a href="https://github.com/settings/tokens/new?scopes=gist&description=TBC+Assignment+Sheet&expiration=" target="_blank" style="display:block;text-align:center;font-size:14px;font-weight:900;color:#000;background:var(--neon-green);padding:10px;text-decoration:none;border-radius:3px;margin-bottom:10px">\ud83d\udc49 CREATE TOKEN (opens GitHub \u2014 just click Generate)</a>' +
         '<div style="font-size:14px;color:var(--text-bright);line-height:1.8;margin-bottom:10px">' +
-          '\u2460 Click button above \u2192 \u2461 Scroll down, click <span style="background:var(--neon-green);color:#000;padding:1px 8px;font-weight:900;border-radius:3px;font-size:12px">Generate token</span> \u2192 \u2462 Copy the <span style="font-weight:900;color:var(--neon-green)">ghp_</span> code' +
+          '\u2460 Click button above \u2192 verify only <span style="font-weight:900;color:var(--neon-green)">gist</span> is checked<br>' +
+          '\u2461 Expiration = <span style="font-weight:900;color:var(--neon-green)">No expiration</span> (pre-filled)<br>' +
+          '\u2462 Scroll down, click <span style="background:#2da44e;color:#fff;padding:1px 8px;font-weight:900;border-radius:3px;font-size:12px">Generate token</span><br>' +
+          '\u2463 Copy the <span style="font-weight:900;color:var(--neon-green)">ghp_</span> code and paste below' +
         '</div>' +
         '<input id="cfgGistToken" type="password" style="width:100%;font-size:18px;font-weight:900;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:3px solid var(--neon-orange);color:var(--neon-orange);padding:14px 18px;outline:none;box-sizing:border-box;margin-bottom:10px" placeholder="PASTE TOKEN (ghp_...)" value="' + (cfg.gistToken||'') + '">' +
         '<button class="btn" style="font-size:14px;width:100%;padding:10px;border-color:var(--neon-green);color:var(--neon-green);font-weight:900;letter-spacing:2px" onclick="testGistConnection()">\ud83d\udd0c TEST CONNECTION</button>' +
@@ -2877,13 +2880,13 @@ function openGuildSettings() {
           'This lets you save changes. Each officer creates their own token.' +
         '</div>' +
 
-        '<a href="https://github.com/settings/tokens/new?scopes=gist&description=WoW+Raid+Assignments&expiration=" target="_blank" style="display:block;text-align:center;font-size:18px;font-weight:900;color:#000;background:var(--neon-green);padding:14px;text-decoration:none;border-radius:3px;margin-bottom:14px">👉 CREATE YOUR TOKEN — CLICK HERE</a>' +
+        '<a href="https://github.com/settings/tokens/new?scopes=gist&description=TBC+Assignment+Sheet&expiration=" target="_blank" style="display:block;text-align:center;font-size:18px;font-weight:900;color:#000;background:var(--neon-green);padding:14px;text-decoration:none;border-radius:3px;margin-bottom:14px">👉 CREATE YOUR TOKEN (opens GitHub)</a>' +
 
         '<div style="font-size:16px;color:var(--text-bright);line-height:2;margin-bottom:12px">' +
           '<span style="font-weight:900;color:var(--neon-green);font-size:20px">①</span> Click the green button above<br>' +
-          '<span style="font-weight:900;color:var(--neon-green);font-size:20px">②</span> Scroll down and click <span style="background:var(--neon-green);color:#000;padding:2px 10px;font-weight:900;border-radius:3px">Generate token</span><br>' +
-          '<span style="font-weight:900;color:var(--neon-green);font-size:20px">③</span> Copy the code starting with <span style="font-weight:900;color:var(--neon-green);font-size:18px">ghp_</span><br>' +
-          '<span style="font-weight:900;color:var(--neon-green);font-size:20px">④</span> Paste it here 👇' +
+          '<span style="font-weight:900;color:var(--neon-green);font-size:20px">②</span> Verify only <span style="font-weight:900;color:var(--neon-green)">gist</span> is checked, expiration = <span style="font-weight:900;color:var(--neon-green)">No expiration</span><br>' +
+          '<span style="font-weight:900;color:var(--neon-green);font-size:20px">③</span> Click <span style="background:var(--neon-green);color:#000;padding:2px 10px;font-weight:900;border-radius:3px">Generate token</span><br>' +
+          '<span style="font-weight:900;color:var(--neon-green);font-size:20px">④</span> Copy the code starting with <span style="font-weight:900;color:var(--neon-green);font-size:18px">ghp_</span> and paste below 👇' +
         '</div>' +
 
         '<input id="cfgGistToken" type="password" style="width:100%;font-size:20px;font-weight:900;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:3px solid var(--neon-orange);color:var(--neon-orange);padding:14px 18px;outline:none;box-sizing:border-box" placeholder="PASTE YOUR TOKEN (ghp_...)" value="' + (cfg.gistToken||'') + '">' +
@@ -3347,6 +3350,10 @@ function importAllWCL() {
   
   var cfg = getGuildConfig();
   var guildId = cfg.wclId || '';
+  if (!guildId) {
+    toast('Set your WCL Guild ID first (⚙ Settings → Step 2)');
+    return;
+  }
   
   toast('Fetching guild reports from WCL...');
   
@@ -4018,7 +4025,14 @@ function exchangeWclCode(code, redirectUri) {
 })();
 
 function generateWCLToken() {
+  // Always read from DOM fields first (wizard may not have saved yet)
   var cfg = getGuildConfig();
+  var el1 = document.getElementById('cfgWclClientId');
+  var el2 = document.getElementById('cfgWclClientSecret');
+  if (el1 && el1.value) cfg.wclClientId = el1.value;
+  if (el2 && el2.value) cfg.wclClientSecret = el2.value;
+  saveGuildConfig(cfg);
+  
   if (!cfg.wclClientId || !cfg.wclClientSecret) {
     toast('Enter your WCL Client ID and Secret first');
     return;
@@ -4119,6 +4133,11 @@ if (!window._perfBoss) window._perfBoss = '';
 // Configurable rank positions — edit these to track any rank #
 if (!window.rankPositions) {
   try { window.rankPositions = JSON.parse(localStorage.getItem('ubiq_rankPositions') || '[1,100,500,1000,2000]'); } catch(e) { window.rankPositions = [1,100,500,1000,2000]; }
+}
+// Validate — if corrupted or too few, reset to defaults
+if (!Array.isArray(window.rankPositions) || window.rankPositions.length < 2) {
+  window.rankPositions = [1, 100, 500, 1000, 2000];
+  try { localStorage.setItem('ubiq_rankPositions', JSON.stringify(window.rankPositions)); } catch(e) {}
 }
 function saveRankPositions() { try { localStorage.setItem('ubiq_rankPositions', JSON.stringify(window.rankPositions)); } catch(e) {} }
 // Rank colors by index
@@ -5066,6 +5085,7 @@ function renderPlayerProfile(container, playerName) {
       // Check cache
       var cacheKey=(e.reportCode||'')+'_'+(e.fightId||0)+'_'+playerName;
       if (window._fightDetailCache && window._fightDetailCache[cacheKey]) {
+        window._lastFightCacheKey=cacheKey;
         h+=renderFightDetailHTML(window._fightDetailCache[cacheKey], e, playerName, fightPeers, avgDPS, cc);
       } else if (e.reportCode && e.fightId) {
         h+='<div style="text-align:center;padding:20px">';
@@ -5172,6 +5192,7 @@ function loadFightDetail(reportCode, fightId, playerName, containerId, avgDPS, b
       var pEntry = {dps: 0, boss: '', date: ''};
       // Store entry context for comparison buttons
       window._lastFightEntry = {reportCode: reportCode, fightId: fightId, boss: bossName||'', dps: 0};
+      window._lastFightCacheKey = reportCode+'_'+fightId+'_'+playerName;
       container.innerHTML = renderFightDetailHTML(result, window._lastFightEntry, playerName, [], avgDPS, clsColorFor(''));
     });
   }).catch(function(err) {
@@ -5212,16 +5233,11 @@ function renderFightDetailHTML(data, entry, playerName, peers, avgDPS, cc) {
   summaryStats.forEach(function(s) {
     h+='<div style="text-align:center;min-width:70px"><div style="font-size:18px;font-weight:900;color:'+s.c+';font-family:Orbitron,sans-serif">'+s.v+'</div><div style="font-size:9px;color:#666;font-family:Share Tech Mono,monospace;letter-spacing:1px">'+s.l+'</div></div>';
   });
-  // Compare to rank button
+  // Compare to rank — auto-detect player rank and generate smart positions
   if (entry.reportCode && entry.fightId && entry.boss) {
-    var positions = window.rankPositions || [1,100,500,1000,2000];
     h+='<div style="margin-left:auto;display:flex;flex-direction:column;gap:3px;align-items:flex-end">';
-    h+='<div style="font-size:9px;color:#666;font-family:Share Tech Mono,monospace">COMPARE TO</div>';
-    h+='<div style="display:flex;gap:3px;flex-wrap:wrap">';
-    positions.forEach(function(pos, idx) {
-      var cmpId = "cmp_"+entry.reportCode+"_"+entry.fightId+"_"+pos;
-      h+='<button class="btn" style="font-size:10px;padding:2px 8px;border-color:'+rankColor(idx)+';color:'+rankColor(idx)+'" onclick="loadRankComparison(\''+entry.boss.replace(/'/g,'')+'\',\''+playerName.replace(/'/g,'')+'\','+pos+',\'fightCmp_'+entry.fightId+'\')" id="'+cmpId+'">#'+pos+'</button>';
-    });
+    h+='<div id="cmpBtns_'+entry.fightId+'" style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">';
+    h+='<button class="btn primary" style="font-size:11px;padding:4px 14px" onclick="autoDetectRankCompare(\''+entry.boss.replace(/'/g,'')+'\',\''+playerName.replace(/'/g,'')+'\','+dps+',\'fightCmp_'+entry.fightId+'\',\'cmpBtns_'+entry.fightId+'\')">\\ud83c\\udfaf FIND MY RANK & COMPARE</button>';
     h+='</div></div>';
   }
   h+='</div>';
@@ -5396,6 +5412,129 @@ function renderFightDetailHTML(data, entry, playerName, peers, avgDPS, cc) {
 // ═══════════════════════════════════════════
 if (!window._rankCompCache) window._rankCompCache = {};
 
+function autoDetectRankCompare(bossName, playerName, playerDps, cmpContainerId, btnContainerId) {
+  var btnContainer = document.getElementById(btnContainerId);
+  if (!btnContainer) return;
+  
+  var token = getWclToken();
+  if (!token) { toast('Set up WCL credentials first'); return; }
+  
+  // Get player class
+  var pR = GUILD_ROSTER.find(function(r){return r.name===playerName;});
+  var cls = pR ? pR.cls : '';
+  var spec = pR ? (pR.spec||'') : '';
+  if (!cls) {
+    // Fall back to growth data
+    Object.keys(assignments).forEach(function(key) {
+      var a = assignments[key];
+      if (a.growth) a.growth.forEach(function(g) {
+        if (g.player === playerName && g.cls && !cls) cls = g.cls;
+      });
+    });
+  }
+  if (!cls) { toast('Player class not found'); return; }
+  
+  btnContainer.innerHTML = '<span style="font-size:11px;color:var(--neon-cyan)">Detecting rank for '+playerDps.toLocaleString()+' DPS...</span>';
+  
+  var bossClean = bossName.replace(/ \d+$/, '');
+  var wclSpec = (spec||'').replace('Feral (Cat)','Feral').replace('Feral (Bear)','Guardian').replace('Beast Mastery','BeastMastery');
+  var specFilter = wclSpec ? ', specName:"'+wclSpec+'"' : '';
+  
+  // Step 1: Find encounter ID
+  var zoneIds = [1007,1008,1009,1010,1011,1012,1013,1014,1015];
+  var zoneQ = zoneIds.map(function(z){return 'z'+z+': zone(id:'+z+') { encounters { id name } }';}).join(' ');
+  
+  wclQuery('{ worldData { '+zoneQ+' } }').then(function(zd) {
+    if (!zd||!zd.worldData) throw new Error('Zone query failed');
+    var encId = null;
+    Object.values(zd.worldData).forEach(function(zone) {
+      if (zone&&zone.encounters) zone.encounters.forEach(function(enc) {
+        if (enc.name.toLowerCase()===bossClean.toLowerCase()) encId=enc.id;
+      });
+    });
+    if (!encId) throw new Error('Encounter not found: '+bossClean);
+    
+    // Step 2: Query ranking pages to find where player's DPS falls
+    // Start with pages 1, 5, 10, 20 to scan the range
+    var scanPages = [1, 3, 5, 10, 15, 20];
+    var scanQ = scanPages.map(function(p){return 'p'+p+': characterRankings(className:"'+cls+'"'+specFilter+', metric:dps, page:'+p+')';}).join(' ');
+    
+    return wclQuery('{ worldData { encounter(id:'+encId+') { '+scanQ+' } } }').then(function(rd) {
+      if (!rd||!rd.worldData||!rd.worldData.encounter) throw new Error('No rankings');
+      var enc = rd.worldData.encounter;
+      
+      // Build ranked DPS array with absolute positions
+      var allRanked = [];
+      scanPages.forEach(function(pg) {
+        var pd = enc['p'+pg];
+        if (pd && pd.rankings) pd.rankings.forEach(function(r, i) {
+          allRanked.push({rank: (pg-1)*100+i+1, dps: Math.round(r.amount||0)});
+        });
+      });
+      
+      if (!allRanked.length) throw new Error('No rankings found for '+cls);
+      
+      // Find player's approximate rank — where does their DPS fit?
+      allRanked.sort(function(a,b){return b.dps-a.dps;});
+      var playerRank = allRanked[allRanked.length-1].rank; // default: worst we found
+      for (var i=0; i<allRanked.length; i++) {
+        if (playerDps >= allRanked[i].dps) {
+          playerRank = allRanked[i].rank;
+          break;
+        }
+      }
+      
+      // Cap at 2000
+      var startRank = Math.min(playerRank, 2000);
+      
+      // Generate 5 evenly spaced positions from startRank toward #1
+      var positions = [];
+      if (startRank <= 5) {
+        // Already near the top — just show 1 through startRank
+        for (var r=1; r<=Math.min(startRank, 5); r++) positions.push(r);
+      } else {
+        var step = Math.floor((startRank - 1) / 5);
+        for (var p=0; p<5; p++) {
+          var pos = startRank - (step * (p+1));
+          if (pos < 1) pos = 1;
+          positions.push(pos);
+        }
+        positions.sort(function(a,b){return a-b;});
+        // Make sure #1 is included
+        if (positions[0] !== 1) positions.unshift(1);
+        // Deduplicate
+        positions = positions.filter(function(v,i,a){return a.indexOf(v)===i;});
+      }
+      
+      // Also store rank limit DPS values from the scan
+      var rlData = {};
+      positions.forEach(function(pos) {
+        var closest = null, closestDist = Infinity;
+        allRanked.forEach(function(r) {
+          var dist = Math.abs(r.rank - pos);
+          if (dist < closestDist) { closestDist = dist; closest = r; }
+        });
+        if (closest) rlData[pos] = closest.dps;
+      });
+      setRankLimitData(cls, spec, bossName, rlData);
+      
+      // Show the buttons
+      var h = '<div style="font-size:10px;color:#888;font-family:Share Tech Mono,monospace;margin-bottom:3px">YOUR RANK: ~#'+playerRank.toLocaleString()+' \\u2014 COMPARE TO:</div>';
+      h += '<div style="display:flex;gap:3px;flex-wrap:wrap">';
+      positions.forEach(function(pos, idx) {
+        var dpsAtPos = rlData[pos] || 0;
+        h += '<button class="btn" style="font-size:10px;padding:2px 8px;border-color:'+rankColor(idx)+';color:'+rankColor(idx)+'" onclick="loadRankComparison(\''+bossName.replace(/'/g,'')+'\',\''+playerName.replace(/'/g,'')+'\','+pos+',\''+cmpContainerId+'\')" title="~'+dpsAtPos.toLocaleString()+' DPS">#'+pos+'</button>';
+      });
+      h += '</div>';
+      btnContainer.innerHTML = h;
+      
+      toast('\\u2705 Your rank: ~#'+playerRank.toLocaleString()+' | '+positions.length+' comparison targets generated');
+    });
+  }).catch(function(err) {
+    btnContainer.innerHTML = '<span style="color:#aa3344;font-size:11px">Failed: '+err.message+'</span>';
+  });
+}
+
 function loadRankComparison(bossName, playerName, rankPos, containerId) {
   var container = document.getElementById(containerId);
   if (!container) return;
@@ -5403,11 +5542,22 @@ function loadRankComparison(bossName, playerName, rankPos, containerId) {
   var token = getWclToken();
   if (!token) { toast('Set up WCL credentials first'); return; }
   
-  // Get player class/spec from roster
+  // Get player class/spec — try roster first, then growth data
   var pR = GUILD_ROSTER.find(function(r){return r.name===playerName;});
   var cls = pR ? pR.cls : '';
   var spec = pR ? (pR.spec||'') : '';
-  if (!cls) { toast('Player class not found'); return; }
+  if (!cls) {
+    // Fall back to growth data
+    var growth = JSON.parse(localStorage.getItem('ubiq_perfGrowth') || '{}');
+    var playerEntries = growth[playerName] || [];
+    if (playerEntries.length) cls = playerEntries[0].cls || '';
+    // Try active player's class from current view
+    if (!cls && window._perfPlayer) {
+      var allG = growth[window._perfPlayer] || [];
+      if (allG.length) cls = allG[0].cls || '';
+    }
+  }
+  if (!cls) { toast('Player class not found — import a WCL report first'); return; }
   
   var cacheKey = bossName+'|'+cls+'_'+spec+'|#'+rankPos;
   if (window._rankCompCache[cacheKey]) {
@@ -5441,7 +5591,8 @@ function loadRankComparison(bossName, playerName, rankPos, containerId) {
     positions.forEach(function(pos) { pageSet[Math.max(1, Math.ceil(pos/100))] = true; });
     var pages = Object.keys(pageSet).map(Number).sort(function(a,b){return a-b;});
     
-    var rankQueries = pages.map(function(p){return 'p'+p+': characterRankings(className:"'+cls+'", specName:"'+wclSpec+'", metric:dps, page:'+p+')';}).join(' ');
+    var specFilter = wclSpec ? ', specName:"'+wclSpec+'"' : '';
+    var rankQueries = pages.map(function(p){return 'p'+p+': characterRankings(className:"'+cls+'"'+specFilter+', metric:dps, page:'+p+')';}).join(' ');
     return wclQuery('{ worldData { encounter(id:'+encId+') { '+rankQueries+' } } }').then(function(rd) {
       if (!rd||!rd.worldData||!rd.worldData.encounter) throw new Error('No rankings data');
       var enc = rd.worldData.encounter;
@@ -5587,21 +5738,50 @@ function renderComparisonHTML(data, rankPos) {
   var totalDmg = 0; data.dmgDone.forEach(function(e){totalDmg+=e.total||0;});
   var col = rankColor((window.rankPositions||[]).indexOf(rankPos));
   
+  // Get player's own fight data for side-by-side
+  var myData = null;
+  if (window._lastFightCacheKey && window._fightDetailCache) {
+    myData = window._fightDetailCache[window._lastFightCacheKey];
+  }
+  var myTotalDmg = 0;
+  var myFightSec = 1;
+  if (myData) {
+    myData.dmgDone.forEach(function(e){myTotalDmg+=e.total||0;});
+    myFightSec = myData.totalTime ? myData.totalTime/1000 : 1;
+  }
+  var myDps = myData ? Math.round(myTotalDmg/myFightSec) : 0;
+  var theirDps = Math.round(totalDmg/fightSec);
+  
   h+='<div style="background:#0d0d18;border:1px solid '+col+';padding:12px;margin-top:8px">';
-  h+='<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">';
-  h+='<div style="font-family:Orbitron,sans-serif;font-size:13px;color:'+col+';letter-spacing:2px">RANK #'+rankPos+(data.requestedRank && data.requestedRank !== rankPos ? ' <span style="font-size:10px;color:#888">(requested #'+data.requestedRank+')</span>' : '')+'</div>';
-  h+='<div style="font-size:13px;font-weight:900;color:'+clsColorFor(data.cls)+'">'+data.playerName+'</div>';
-  if (data.server) h+='<div style="font-size:10px;color:#666">'+data.server+'</div>';
-  h+='<div style="font-size:16px;font-weight:900;color:var(--neon-cyan);margin-left:auto;font-family:Orbitron,sans-serif">'+data.dps.toLocaleString()+' DPS</div>';
+  
+  // Header: side-by-side names
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  h+='<div style="text-align:center;padding:8px;background:#14141e;border:1px solid '+col+'">';
+  h+='<div style="font-family:Orbitron,sans-serif;font-size:11px;color:'+col+';letter-spacing:1px">RANK #'+rankPos+(data.requestedRank && data.requestedRank !== rankPos ? ' (#'+data.requestedRank+' requested)' : '')+' \u2014 '+data.playerName+'</div>';
+  h+='<div style="font-size:22px;font-weight:900;color:'+col+';font-family:Orbitron,sans-serif">'+theirDps.toLocaleString()+' <span style="font-size:11px;color:#666">DPS</span></div>';
+  if (data.server) h+='<div style="font-size:10px;color:#555">'+data.server+'</div>';
   h+='</div>';
+  h+='<div style="text-align:center;padding:8px;background:#14141e;border:1px solid var(--neon-cyan)">';
+  h+='<div style="font-family:Orbitron,sans-serif;font-size:11px;color:var(--neon-cyan);letter-spacing:1px">YOUR FIGHT</div>';
+  h+='<div style="font-size:22px;font-weight:900;color:var(--neon-cyan);font-family:Orbitron,sans-serif">'+myDps.toLocaleString()+' <span style="font-size:11px;color:#666">DPS</span></div>';
+  h+='</div>';
+  h+='</div>';
+  
+  // DPS difference
+  var dpsDiff = theirDps - myDps;
+  var dpsDiffPct = myDps > 0 ? Math.round(dpsDiff/myDps*100) : 0;
+  h+='<div style="text-align:center;margin-bottom:10px;font-size:13px;font-family:Share Tech Mono,monospace;font-weight:900;color:'+(dpsDiff>0?'#aa3344':'var(--neon-green)')+'">'+
+    (dpsDiff>0?'\u25b2 THEY DO '+dpsDiff.toLocaleString()+' MORE DPS (+'+dpsDiffPct+'%)':'\u25bc YOU DO '+Math.abs(dpsDiff).toLocaleString()+' MORE DPS')+
+  '</div>';
   
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
   
   // ── THEIR DAMAGE DONE ──
+  // ── SIDE-BY-SIDE DAMAGE ──
   if (data.dmgDone.length) {
     var sorted = data.dmgDone.slice().sort(function(a,b){return(b.total||0)-(a.total||0);});
-    h+='<div style="background:#0a0a12;border:1px solid #2a2a44;padding:8px">';
-    h+='<div style="font-size:10px;color:'+col+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u2694 THEIR DAMAGE ('+sorted.length+' abilities)</div>';
+    h+='<div style="background:#0a0a12;border:1px solid '+col+';padding:8px">';
+    h+='<div style="font-size:10px;color:'+col+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u2694 RANK #'+rankPos+' DAMAGE ('+sorted.length+')</div>';
     h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Ability</th><th>Total</th><th>DPS</th><th>Hits</th><th>Crit%</th></tr></thead><tbody>';
     sorted.forEach(function(ab) {
       var pct = totalDmg>0?Math.round((ab.total||0)/totalDmg*100):0;
@@ -5618,10 +5798,28 @@ function renderComparisonHTML(data, rankPos) {
   }
   
   // ── THEIR CASTS ──
+  if (myData && myData.dmgDone.length) {
+    var mySorted = myData.dmgDone.slice().sort(function(a,b){return(b.total||0)-(a.total||0);});
+    h+='<div style="background:#0a0a12;border:1px solid var(--neon-cyan);padding:8px">';
+    h+='<div style="font-size:10px;color:var(--neon-cyan);font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u2694 YOUR DAMAGE ('+mySorted.length+')</div>';
+    h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Ability</th><th>Total</th><th>DPS</th><th>Crit%</th></tr></thead><tbody>';
+    mySorted.forEach(function(ab) {
+      var pct = myTotalDmg>0?Math.round((ab.total||0)/myTotalDmg*100):0;
+      var hits = (ab.hitCount||0)+(ab.critCount||0)+(ab.tickCount||0)+(ab.critTickCount||0);
+      var crits = (ab.critCount||0)+(ab.critTickCount||0);
+      var critPct = hits>0?Math.round(crits/hits*100):0;
+      h+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--text-bright);font-weight:700">'+(ab.name||'?')+' <span style="color:#444">'+pct+'%</span></td>';
+      h+='<td style="text-align:right;color:var(--neon-cyan)">'+fmtK(ab.total||0)+'</td>';
+      h+='<td style="text-align:right">'+Math.round((ab.total||0)/myFightSec)+'</td>';
+      h+='<td style="text-align:right">'+critPct+'%</td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  // ── SIDE-BY-SIDE CASTS ──
   if (data.casts.length) {
     var sortedC = data.casts.slice().sort(function(a,b){return(b.total||0)-(a.total||0);});
-    h+='<div style="background:#0a0a12;border:1px solid #2a2a44;padding:8px">';
-    h+='<div style="font-size:10px;color:'+col+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u26a1 THEIR CASTS ('+sortedC.length+')</div>';
+    h+='<div style="background:#0a0a12;border:1px solid '+col+';padding:8px">';
+    h+='<div style="font-size:10px;color:'+col+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u26a1 RANK #'+rankPos+' CASTS ('+sortedC.length+')</div>';
     h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Ability</th><th>Casts</th><th>CPM</th></tr></thead><tbody>';
     sortedC.forEach(function(c) {
       var cpm = fightMin>0?(c.total/fightMin).toFixed(1):'0';
@@ -5635,19 +5833,52 @@ function renderComparisonHTML(data, rankPos) {
   // ── THEIR BUFFS ──
   if (data.buffs.length) {
     var sortedB = data.buffs.slice().sort(function(a,b){return(b.totalUptime||0)-(a.totalUptime||0);});
-    h+='<div style="background:#0a0a12;border:1px solid #2a2a44;padding:8px;grid-column:span 2">';
-    h+='<div style="font-size:10px;color:'+col+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u2b06 THEIR BUFFS ('+sortedB.length+')</div>';
-    h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:2px">';
+    if (myData && myData.casts.length) {
+    var mySortedC = myData.casts.slice().sort(function(a,b){return(b.total||0)-(a.total||0);});
+    var myFightMin2 = myFightSec/60;
+    h+='<div style="background:#0a0a12;border:1px solid var(--neon-cyan);padding:8px">';
+    h+='<div style="font-size:10px;color:var(--neon-cyan);font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u26a1 YOUR CASTS ('+mySortedC.length+')</div>';
+    h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Ability</th><th>Casts</th><th>CPM</th></tr></thead><tbody>';
+    mySortedC.forEach(function(c) {
+      var cpm = myFightMin2>0?(c.total/myFightMin2).toFixed(1):'0';
+      h+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--text-bright);font-weight:700">'+(c.name||'?')+'</td>';
+      h+='<td style="text-align:right;font-weight:700">'+(c.total||0)+'</td>';
+      h+='<td style="text-align:right;color:var(--neon-cyan)">'+cpm+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  // Buffs: RANK on left, YOURS on right
+    h+='<div style="background:#0a0a12;border:1px solid '+col+';padding:8px">';
+    h+='<div style="font-size:10px;color:'+col+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u2b06 RANK #'+rankPos+' BUFFS ('+sortedB.length+')</div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
     sortedB.forEach(function(b) {
       var upPct = data.totalTime>0?Math.round((b.totalUptime||0)/data.totalTime*100):0;
       if (upPct < 1) return;
-      h+='<div style="display:flex;align-items:center;gap:4px;padding:2px 4px;font-size:10px;font-family:Share Tech Mono,monospace">';
-      h+='<span style="color:var(--text-bright);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(b.name||'?')+'</span>';
-      h+='<div style="width:50px;background:#1a1a34;height:6px"><div style="width:'+upPct+'%;height:6px;background:'+col+'"></div></div>';
-      h+='<span style="color:'+col+';font-weight:700;min-width:28px;text-align:right">'+upPct+'%</span>';
+      var iconUrl = b.icon ? 'https://wow.zamimg.com/images/wow/icons/small/'+b.icon+'.jpg' : '';
+      h+='<div style="display:flex;align-items:center;gap:3px;background:#14141e;border:1px solid #1a1a34;padding:2px 5px" title="'+(b.name||'')+' '+upPct+'%">';
+      if(iconUrl) h+='<img src="'+iconUrl+'" style="width:16px;height:16px;border:1px solid '+col+'" onerror="this.style.display=\x27none\x27">';
+      h+='<span style="font-size:10px;color:var(--text-bright);font-weight:700;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(b.name||'?')+'</span>';
+      h+='<span style="font-size:10px;font-weight:900;color:'+col+'">'+upPct+'%</span>';
       h+='</div>';
     });
     h+='</div></div>';
+    if (myData && myData.buffs.length) {
+      var mySortedB = myData.buffs.slice().sort(function(a,b){return(b.totalUptime||0)-(a.totalUptime||0);});
+      h+='<div style="background:#0a0a12;border:1px solid var(--neon-cyan);padding:8px">';
+      h+='<div style="font-size:10px;color:var(--neon-cyan);font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u2b06 YOUR BUFFS ('+mySortedB.length+')</div>';
+      h+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
+      mySortedB.forEach(function(b) {
+        var upPct = myData.totalTime>0?Math.round((b.totalUptime||0)/myData.totalTime*100):0;
+        if (upPct < 1) return;
+        var iconUrl = b.icon ? 'https://wow.zamimg.com/images/wow/icons/small/'+b.icon+'.jpg' : '';
+        h+='<div style="display:flex;align-items:center;gap:3px;background:#14141e;border:1px solid #1a1a34;padding:2px 5px" title="'+(b.name||'')+' '+upPct+'%">';
+        if(iconUrl) h+='<img src="'+iconUrl+'" style="width:16px;height:16px;border:1px solid var(--neon-cyan)" onerror="this.style.display=\x27none\x27">';
+        h+='<span style="font-size:10px;color:var(--text-bright);font-weight:700;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(b.name||'?')+'</span>';
+        h+='<span style="font-size:10px;font-weight:900;color:var(--neon-cyan)">'+upPct+'%</span>';
+        h+='</div>';
+      });
+      h+='</div></div>';
+    }
   }
   
   h+='</div>'; // end grid
@@ -5731,6 +5962,7 @@ function addRankPosition() {
 }
 
 function removeRankPosition(idx) {
+  if (window.rankPositions.length <= 1) { toast('Need at least 1 rank position'); return; }
   var removed = window.rankPositions.splice(idx, 1);
   saveRankPositions();
   document.getElementById('rlEditorOverlay').remove();
@@ -5797,8 +6029,9 @@ function fetchRankLimitsFromWCL(cls, spec, boss) {
     var pageSet = {};
     positions.forEach(function(pos) { var pg = Math.max(1, Math.ceil(pos / 100)); pageSet[pg] = true; });
     var pages = Object.keys(pageSet).map(Number).sort(function(a,b){return a-b;});
+    var specFilter2 = wclSpec ? ', specName: "' + wclSpec + '"' : '';
     var rankQuery = '{ reportData: worldData { encounter(id: ' + encId + ') { ' +
-      pages.map(function(p) { return 'p' + p + ': characterRankings(className: "' + cls + '", specName: "' + wclSpec + '", metric: dps, page: ' + p + ')'; }).join(' ') +
+      pages.map(function(p) { return 'p' + p + ': characterRankings(className: "' + cls + '"' + specFilter2 + ', metric: dps, page: ' + p + ')'; }).join(' ') +
       ' } } }';
     
     return wclQuery(rankQuery).then(function(rData) {
