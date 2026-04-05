@@ -5681,8 +5681,12 @@ function loadRankComparison(bossName, playerName, rankPos, containerId) {
           
           var q = '{ reportData { report(code:"'+rankedCode+'") {'+
             ' dmgDone: table(dataType:DamageDone, fightIDs:['+rankedFightId+'], sourceID:'+srcId+')'+
+            ' dmgTaken: table(dataType:DamageTaken, fightIDs:['+rankedFightId+'], sourceID:'+srcId+')'+
             ' buffs: table(dataType:Buffs, fightIDs:['+rankedFightId+'], sourceID:'+srcId+')'+
+            ' debuffs: table(dataType:Debuffs, fightIDs:['+rankedFightId+'], sourceID:'+srcId+')'+
             ' casts: table(dataType:Casts, fightIDs:['+rankedFightId+'], sourceID:'+srcId+')'+
+            ' deaths: table(dataType:Deaths, fightIDs:['+rankedFightId+'])'+
+            ' healing: table(dataType:Healing, fightIDs:['+rankedFightId+'], sourceID:'+srcId+')'+
             ' } } }';
           
           return qFn(q).then(function(fd) {
@@ -5697,8 +5701,12 @@ function loadRankComparison(bossName, playerName, rankPos, containerId) {
               cls: cls,
               spec: spec,
               dmgDone: (r.dmgDone&&r.dmgDone.data&&r.dmgDone.data.entries)||[],
+              dmgTaken: (r.dmgTaken&&r.dmgTaken.data&&r.dmgTaken.data.entries)||[],
               buffs: (r.buffs&&r.buffs.data&&r.buffs.data.auras)||[],
+              debuffs: (r.debuffs&&r.debuffs.data&&r.debuffs.data.auras)||[],
               casts: (r.casts&&r.casts.data&&r.casts.data.entries)||[],
+              deaths: (r.deaths&&r.deaths.data&&r.deaths.data.entries)||[],
+              healing: (r.healing&&r.healing.data&&r.healing.data.entries)||[],
               totalTime: (r.dmgDone&&r.dmgDone.data&&r.dmgDone.data.totalTime)||0
             };
             window._rankCompCache[cacheKey] = result;
@@ -5879,6 +5887,60 @@ function renderComparisonHTML(data, rankPos) {
       });
       h+='</div></div>';
     }
+  }
+  
+  // ── SIDE-BY-SIDE DEBUFFS ──
+  if (data.debuffs && data.debuffs.length) {
+    var theirDebuffs = data.debuffs.slice().sort(function(a,b){return(b.totalUptime||0)-(a.totalUptime||0);});
+    h+='<div style="background:#0a0a12;border:1px solid '+col+';padding:8px">';
+    h+='<div style="font-size:10px;color:'+col+';font-family:Orbitron,monospace;letter-spacing:1px;margin-bottom:6px">\u2b07 RANK #'+rankPos+' DEBUFFS ('+theirDebuffs.length+')</div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
+    theirDebuffs.forEach(function(b){var up=data.totalTime>0?Math.round((b.totalUptime||0)/data.totalTime*100):0;if(up<1)return;var ico=b.icon?'https://wow.zamimg.com/images/wow/icons/small/'+b.icon+'.jpg':'';h+='<div style="display:flex;align-items:center;gap:3px;background:#14141e;border:1px solid #1a1a34;padding:2px 5px" title="'+(b.name||'')+' '+up+'%">';if(ico)h+='<img src="'+ico+'" style="width:16px;height:16px;border:1px solid '+col+'" onerror="this.style.display=\'none\'">';h+='<span style="font-size:10px;color:var(--neon-purple);font-weight:700;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(b.name||'?')+'</span><span style="font-size:10px;font-weight:900;color:#888">'+up+'%</span></div>';});
+    h+='</div></div>';
+  }
+  if (myData && myData.debuffs && myData.debuffs.length) {
+    var myDebuffs = myData.debuffs.slice().sort(function(a,b){return(b.totalUptime||0)-(a.totalUptime||0);});
+    h+='<div style="background:#0a0a12;border:1px solid var(--neon-cyan);padding:8px">';
+    h+='<div style="font-size:10px;color:var(--neon-cyan);font-family:Orbitron,monospace;letter-spacing:1px;margin-bottom:6px">\u2b07 YOUR DEBUFFS ('+myDebuffs.length+')</div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
+    myDebuffs.forEach(function(b){var up=myData.totalTime>0?Math.round((b.totalUptime||0)/myData.totalTime*100):0;if(up<1)return;var ico=b.icon?'https://wow.zamimg.com/images/wow/icons/small/'+b.icon+'.jpg':'';h+='<div style="display:flex;align-items:center;gap:3px;background:#14141e;border:1px solid #1a1a34;padding:2px 5px" title="'+(b.name||'')+' '+up+'%">';if(ico)h+='<img src="'+ico+'" style="width:16px;height:16px;border:1px solid var(--neon-cyan)" onerror="this.style.display=\'none\'">';h+='<span style="font-size:10px;color:var(--neon-purple);font-weight:700;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(b.name||'?')+'</span><span style="font-size:10px;font-weight:900;color:#888">'+up+'%</span></div>';});
+    h+='</div></div>';
+  }
+  
+  // ── SIDE-BY-SIDE DAMAGE TAKEN ──
+  if (data.dmgTaken && data.dmgTaken.length) {
+    var theirDT = data.dmgTaken.slice().sort(function(a,b){return(b.total||0)-(a.total||0);});
+    var theirTotalDT=0;theirDT.forEach(function(e){theirTotalDT+=e.total||0;});
+    h+='<div style="background:#0a0a12;border:1px solid '+col+';padding:8px">';
+    h+='<div style="font-size:10px;color:var(--neon-orange);font-family:Orbitron,monospace;letter-spacing:1px;margin-bottom:6px">\ud83d\udee1 RANK DMGTAKEN ('+Math.round(theirTotalDT/fightSec)+' DTPS)</div>';
+    h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><tbody>';
+    theirDT.slice(0,10).forEach(function(ab){h+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--neon-orange);font-weight:700">'+(ab.name||'?')+'</td><td style="text-align:right">'+fmtK(ab.total||0)+'</td></tr>';});
+    h+='</tbody></table></div>';
+  }
+  if (myData && myData.dmgTaken && myData.dmgTaken.length) {
+    var myDT = myData.dmgTaken.slice().sort(function(a,b){return(b.total||0)-(a.total||0);});
+    var myTotalDT=0;myDT.forEach(function(e){myTotalDT+=e.total||0;});
+    h+='<div style="background:#0a0a12;border:1px solid var(--neon-cyan);padding:8px">';
+    h+='<div style="font-size:10px;color:var(--neon-orange);font-family:Orbitron,monospace;letter-spacing:1px;margin-bottom:6px">\ud83d\udee1 YOUR DMGTAKEN ('+Math.round(myTotalDT/myFightSec)+' DTPS)</div>';
+    h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><tbody>';
+    myDT.slice(0,10).forEach(function(ab){h+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--neon-orange);font-weight:700">'+(ab.name||'?')+'</td><td style="text-align:right">'+fmtK(ab.total||0)+'</td></tr>';});
+    h+='</tbody></table></div>';
+  }
+  
+  // ── DEATHS COMPARISON ──
+  var theirDeaths = data.deaths ? data.deaths.filter(function(d){return d.name===data.playerName;}) : [];
+  var myDeaths = (myData && myData.deaths) ? myData.deaths.filter(function(d){return d.name===(myData.playerName||'');}) : [];
+  if (theirDeaths.length || myDeaths.length) {
+    h+='<div style="background:#0a0a12;border:1px solid '+col+';padding:8px">';
+    h+='<div style="font-size:10px;color:#aa3344;font-family:Orbitron,monospace;letter-spacing:1px;margin-bottom:6px">\u2620 RANK DEATHS: '+theirDeaths.length+'</div>';
+    theirDeaths.forEach(function(d){if(d.killingBlow)h+='<div style="font-size:10px;color:#888">Killed by: <span style="color:#ff6666">'+(d.killingBlow.name||'?')+'</span></div>';});
+    if(!theirDeaths.length)h+='<div style="font-size:10px;color:var(--neon-green)">No deaths \u2714</div>';
+    h+='</div>';
+    h+='<div style="background:#0a0a12;border:1px solid var(--neon-cyan);padding:8px">';
+    h+='<div style="font-size:10px;color:#aa3344;font-family:Orbitron,monospace;letter-spacing:1px;margin-bottom:6px">\u2620 YOUR DEATHS: '+myDeaths.length+'</div>';
+    myDeaths.forEach(function(d){if(d.killingBlow)h+='<div style="font-size:10px;color:#888">Killed by: <span style="color:#ff6666">'+(d.killingBlow.name||'?')+'</span></div>';});
+    if(!myDeaths.length)h+='<div style="font-size:10px;color:var(--neon-green)">No deaths \u2714</div>';
+    h+='</div>';
   }
   
   h+='</div>'; // end grid
