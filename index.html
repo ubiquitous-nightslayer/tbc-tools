@@ -469,6 +469,45 @@ body.light-theme .font-label, body.light-theme label[style*="color:#6a8a9a"] { c
   body { font-size:14px; }
 }
 
+/* ═══ VIEWER MODE (shared raider link — read-only) ═══ */
+/* Hide credential/admin buttons */
+body.viewer-mode #lockBtn { display:none !important; }
+body.viewer-mode button[onclick*="openGuildSettings"] { display:none !important; }
+body.viewer-mode button[onclick*="cloudSave"] { display:none !important; }
+body.viewer-mode button[onclick*="cloudLoad"] { display:none !important; }
+body.viewer-mode button[onclick*="cloudHistory"] { display:none !important; }
+body.viewer-mode button[onclick*="openKeyModal"] { display:none !important; }
+body.viewer-mode button[onclick*="quickSave"] { display:none !important; }
+body.viewer-mode button[onclick*="generateShareLink"] { display:none !important; }
+body.viewer-mode button[onclick*="downloadXLSX"] { display:none !important; }
+body.viewer-mode button[onclick*="openWclUserTokenModal"] { display:none !important; }
+/* Lock all assignment editing */
+body.viewer-mode .assign-input { pointer-events:none !important; border-bottom-color:transparent !important; }
+body.viewer-mode .cd-input { pointer-events:none !important; }
+body.viewer-mode .notes-area { pointer-events:none !important; }
+body.viewer-mode .wa-input { pointer-events:none !important; }
+body.viewer-mode .map-url-input { pointer-events:none !important; }
+body.viewer-mode .assign-select { pointer-events:none !important; }
+body.viewer-mode .comp-slot-select { pointer-events:none !important; }
+body.viewer-mode .comp-slot-spec { pointer-events:none !important; }
+body.viewer-mode .totem-select { pointer-events:none !important; }
+body.viewer-mode .del-btn { display:none !important; }
+body.viewer-mode .comp-slot-del { display:none !important; }
+body.viewer-mode .comp-class-btn { pointer-events:none !important; }
+body.viewer-mode .video-input-row { display:none !important; }
+/* Lock drawing/map editing */
+body.viewer-mode .draw-tool { pointer-events:none !important; }
+body.viewer-mode .draw-color { pointer-events:none !important; }
+body.viewer-mode .draw-size { pointer-events:none !important; }
+body.viewer-mode .marker-btn { pointer-events:none !important; }
+body.viewer-mode .note-drop-wrap { pointer-events:none !important; }
+body.viewer-mode .phase-tab { pointer-events:none !important; }
+body.viewer-mode canvas { pointer-events:none !important; }
+body.viewer-mode .placed-marker { pointer-events:none !important; }
+body.viewer-mode .marker-delete { display:none !important; }
+/* Show viewer badge */
+body.viewer-mode .viewer-badge { display:inline-flex !important; }
+.viewer-badge { display:none; font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--neon-green); border:1px solid var(--neon-green); padding:3px 10px; letter-spacing:1px; align-items:center; gap:4px; }
 </style>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
@@ -477,6 +516,7 @@ body.light-theme .font-label, body.light-theme label[style*="color:#6a8a9a"] { c
 <div class="header">
   <div class="guild-logo" id="guildNameDisplay" onclick="switchView('assignments')" style="cursor:pointer" title="Back to Assignments">TBC ASSIGNMENTS</div>
   <div class="sheet-title">TBC Assignment Sheet</div>
+  <span class="viewer-badge">👁 VIEW ONLY</span>
   <nav id="mainNav" style="display:flex;gap:2px;margin-left:16px">
     <button class="nav-tab active" onclick="switchView('assignments')">📋 Assignments</button>
     <button class="nav-tab" onclick="switchView('attendance')">👥 Attendance</button>
@@ -2387,12 +2427,22 @@ function loadShareLink() {
             var logo = document.querySelector('.guild-logo');
             if (logo) logo.textContent = data.guildName.toUpperCase();
           }
+          // Apply WCL credentials from Gist so viewers can use comparisons
+          if (data.wclClientId) cfg.wclClientId = data.wclClientId;
+          if (data.wclClientSecret) cfg.wclClientSecret = data.wclClientSecret;
+          if (data.wclGuildId) cfg.wclGuildId = data.wclGuildId;
+          if (data.wclId) cfg.wclId = data.wclId;
+          if (data.server) cfg.server = data.server;
+          saveGuildConfig(cfg);
           renderBoss();
-          // Auto-lock for raiders (no token = read-only)
+          // Auto-lock for raiders (no token = read-only viewer mode)
           if (!cfg.gistToken) {
             isLocked = true;
+            document.body.classList.add('viewer-mode');
+            // Auto-generate WCL token so comparisons work immediately
+            getWclToken();
             renderBoss();
-            toast('✅ Assignments loaded! (View-only — officers can unlock to edit)');
+            toast('✅ Assignments loaded! (View-only mode)');
           } else {
             toast('✅ Assignments loaded!');
           }
@@ -3028,6 +3078,9 @@ function cloudSave() {
   var data = {
     guildName: cfg.guildName || '',
     wclId: cfg.wclId || '',
+    wclGuildId: cfg.wclGuildId || '',
+    wclClientId: cfg.wclClientId || '',
+    wclClientSecret: cfg.wclClientSecret || '',
     server: cfg.server || '',
     savedAt: new Date().toISOString(),
     savedBy: prompt('Your character name (for history):') || 'Unknown',
@@ -3076,6 +3129,12 @@ function cloudLoad() {
       var data = JSON.parse(file.content);
       if (data.assignments) {
         assignments = data.assignments;
+        // Restore WCL credentials from cloud
+        if (data.wclClientId) { cfg.wclClientId = data.wclClientId; }
+        if (data.wclClientSecret) { cfg.wclClientSecret = data.wclClientSecret; }
+        if (data.wclGuildId) { cfg.wclGuildId = data.wclGuildId; }
+        if (data.wclId) { cfg.wclId = data.wclId; }
+        saveGuildConfig(cfg);
         renderBoss();
         var time = data.savedAt ? new Date(data.savedAt).toLocaleString() : 'unknown';
         var who = data.savedBy || 'unknown';
@@ -3292,7 +3351,30 @@ function renderGrowth(key, a) {
 // ═══════════════════════════════════════════
 function getWclToken() {
   var cfg = getGuildConfig();
-  return cfg.wclToken || '';
+  if (cfg.wclToken) return cfg.wclToken;
+  // Auto-generate if we have credentials but no token
+  if (cfg.wclClientId && cfg.wclClientSecret && !window._wclTokenGenerating) {
+    window._wclTokenGenerating = true;
+    fetch('https://www.warcraftlogs.com/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa(cfg.wclClientId + ':' + cfg.wclClientSecret),
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: 'grant_type=client_credentials'
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.access_token) {
+        cfg.wclToken = d.access_token;
+        saveGuildConfig(cfg);
+        toast('\u2705 WCL token auto-generated');
+      }
+      window._wclTokenGenerating = false;
+    })
+    .catch(function() { window._wclTokenGenerating = false; });
+  }
+  return '';
 }
 
 function getWclUserToken() {
@@ -5255,8 +5337,8 @@ function renderFightDetailHTML(data, entry, playerName, peers, avgDPS, cc) {
     sortedDmg.forEach(function(ab) {
       var pct = totalDmg>0 ? Math.round((ab.total||0)/totalDmg*100) : 0;
       var abDps = Math.round((ab.total||0)/fightSec);
-      var hits = (ab.hitCount||0)+(ab.critCount||0)+(ab.tickCount||0)+(ab.critTickCount||0);
-      var crits = (ab.critCount||0)+(ab.critTickCount||0);
+      var hits = (ab.hitCount||0)+(ab.critHitCount||0)+(ab.tickCount||0)+(ab.critTickCount||0);
+      var crits = (ab.critHitCount||0)+(ab.critTickCount||0);
       var critPct = hits>0?Math.round(crits/hits*100):0;
       var avg = hits>0?Math.round((ab.total||0)/hits):0;
       var maxH = ab.max||0;
@@ -5280,7 +5362,7 @@ function renderFightDetailHTML(data, entry, playerName, peers, avgDPS, cc) {
     h+='<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#666;border-bottom:1px solid #2a2a44"><th style="text-align:left;padding:2px 4px">Source</th><th>Total</th><th>DTPS</th><th>Hits</th><th>Avg</th><th>Max</th><th>%</th></tr></thead><tbody>';
     sortedTaken.forEach(function(ab) {
       var pct = totalDmgTaken>0 ? Math.round((ab.total||0)/totalDmgTaken*100) : 0;
-      var hits = (ab.hitCount||0)+(ab.critCount||0)+(ab.tickCount||0);
+      var hits = (ab.hitCount||0)+(ab.critHitCount||0)+(ab.tickCount||0);
       var avg = hits>0?Math.round((ab.total||0)/hits):0;
       h+='<tr style="border-bottom:1px solid #1a1a34;color:#ccc"><td style="padding:3px 4px;color:var(--neon-orange);font-weight:700;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(ab.name||'?')+'</td>';
       h+='<td style="text-align:right;color:var(--neon-orange);font-weight:700">'+fmtK(ab.total||0)+'</td>';
@@ -5382,7 +5464,7 @@ function renderFightDetailHTML(data, entry, playerName, peers, avgDPS, cc) {
     h+='<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#666;border-bottom:1px solid #2a2a44"><th style="text-align:left;padding:2px 4px">Ability</th><th>Total</th><th>HPS</th><th>Hits</th><th>OH%</th></tr></thead><tbody>';
     sortedHeal.forEach(function(ab) {
       var hps = Math.round((ab.total||0)/fightSec);
-      var hits = (ab.hitCount||0)+(ab.critCount||0)+(ab.tickCount||0);
+      var hits = (ab.hitCount||0)+(ab.critHitCount||0)+(ab.tickCount||0);
       var overheal = ab.overheal||0;
       var ohPct = (ab.total||0)>0 ? Math.round(overheal/((ab.total||0)+overheal)*100) : 0;
       h+='<tr style="border-bottom:1px solid #1a1a34"><td style="padding:3px 4px;color:#22cc66;font-weight:700;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(ab.name||'?')+'</td>';
@@ -5793,8 +5875,8 @@ function renderComparisonHTML(data, rankPos) {
     h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Ability</th><th>Total</th><th>DPS</th><th>Hits</th><th>Crit%</th></tr></thead><tbody>';
     sorted.forEach(function(ab) {
       var pct = totalDmg>0?Math.round((ab.total||0)/totalDmg*100):0;
-      var hits = (ab.hitCount||0)+(ab.critCount||0)+(ab.tickCount||0)+(ab.critTickCount||0);
-      var crits = (ab.critCount||0)+(ab.critTickCount||0);
+      var hits = (ab.hitCount||0)+(ab.critHitCount||0)+(ab.tickCount||0)+(ab.critTickCount||0);
+      var crits = (ab.critHitCount||0)+(ab.critTickCount||0);
       var critPct = hits>0?Math.round(crits/hits*100):0;
       h+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--text-bright);font-weight:700;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(ab.name||'?')+' <span style="color:#444">'+pct+'%</span></td>';
       h+='<td style="text-align:right;color:'+col+'">'+fmtK(ab.total||0)+'</td>';
@@ -5813,8 +5895,8 @@ function renderComparisonHTML(data, rankPos) {
     h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Ability</th><th>Total</th><th>DPS</th><th>Crit%</th></tr></thead><tbody>';
     mySorted.forEach(function(ab) {
       var pct = myTotalDmg>0?Math.round((ab.total||0)/myTotalDmg*100):0;
-      var hits = (ab.hitCount||0)+(ab.critCount||0)+(ab.tickCount||0)+(ab.critTickCount||0);
-      var crits = (ab.critCount||0)+(ab.critTickCount||0);
+      var hits = (ab.hitCount||0)+(ab.critHitCount||0)+(ab.tickCount||0)+(ab.critTickCount||0);
+      var crits = (ab.critHitCount||0)+(ab.critTickCount||0);
       var critPct = hits>0?Math.round(crits/hits*100):0;
       h+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--text-bright);font-weight:700">'+(ab.name||'?')+' <span style="color:#444">'+pct+'%</span></td>';
       h+='<td style="text-align:right;color:var(--neon-cyan)">'+fmtK(ab.total||0)+'</td>';
