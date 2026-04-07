@@ -3071,6 +3071,15 @@ function spTestConnection() {
   } else { results.push('\u274c Gist: Not configured — save first'); finish(); }
 }
 
+function updateGuildDisplay() {
+  var cfg = getGuildConfig();
+  var logo = document.querySelector('.guild-logo');
+  if (logo && cfg.guildName) logo.textContent = cfg.guildName.toUpperCase();
+  var footer = document.getElementById('footerGuildName');
+  if (footer && cfg.guildName) footer.textContent = cfg.guildName.toUpperCase();
+  if (cfg.guildName) document.title = cfg.guildName + ' \u2014 TBC Assignment Sheet';
+}
+
 function spCopyForOfficers() {
   var cfg = getGuildConfig();
   var url = window.location.origin + window.location.pathname;
