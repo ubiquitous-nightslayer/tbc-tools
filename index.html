@@ -483,7 +483,7 @@ body.light-theme .font-label, body.light-theme label[style*="color:#6a8a9a"] { c
 .toolbar-btn.accent-green { border-color:var(--neon-green); color:var(--neon-green); }
 .toolbar-btn.accent-green:hover { background:rgba(0,255,136,0.08); }
 .toolbar-dropdown { display:none; position:absolute; top:100%; right:0; z-index:150; background:#14142a; border:1px solid var(--neon-cyan); min-width:180px; margin-top:2px; }
-.toolbar-group:hover .toolbar-dropdown, .toolbar-group.open .toolbar-dropdown { display:block; }
+.toolbar-group.open .toolbar-dropdown { display:block; }
 .toolbar-drop-item { font-family:'Share Tech Mono',monospace; font-size:11px; font-weight:700; padding:8px 14px; color:var(--text-sub); cursor:pointer; border-bottom:1px solid #1a1a34; display:flex; align-items:center; gap:8px; transition:all .1s; white-space:nowrap; background:none; border-left:none; border-right:none; border-top:none; width:100%; text-align:left; }
 .toolbar-drop-item:last-child { border-bottom:none; }
 .toolbar-drop-item:hover { background:rgba(0,240,255,0.06); color:var(--neon-cyan); }
@@ -543,7 +543,7 @@ body.viewer-mode .viewer-badge { display:inline-flex !important; }
   <div class="header-actions">
     <!-- Cloud -->
     <div class="toolbar-group">
-      <button class="toolbar-btn accent-green" title="Cloud Save & Load">☁️ CLOUD ▾</button>
+      <button class="toolbar-btn accent-green" onclick="toggleToolbarDrop(this)" title="Cloud Save & Load">☁️ CLOUD ▾</button>
       <div class="toolbar-dropdown">
         <button class="toolbar-drop-item" onclick="cloudSave()"><span class="drop-accent">⬆</span> Save to Cloud</button>
         <button class="toolbar-drop-item" onclick="cloudLoad()"><span>⬇</span> Load from Cloud</button>
@@ -554,7 +554,7 @@ body.viewer-mode .viewer-badge { display:inline-flex !important; }
     </div>
     <!-- WCL -->
     <div class="toolbar-group">
-      <button class="toolbar-btn" title="WarcraftLogs Import" style="border-color:var(--neon-orange);color:var(--neon-orange)">📊 WCL ▾</button>
+      <button class="toolbar-btn" onclick="toggleToolbarDrop(this)" title="WarcraftLogs Import" style="border-color:var(--neon-orange);color:var(--neon-orange)">📊 WCL ▾</button>
       <div class="toolbar-dropdown">
         <button class="toolbar-drop-item" onclick="importWCLReport()"><span class="drop-warn">📊</span> Import Single Report</button>
         <button class="toolbar-drop-item" onclick="importAllWCL()"><span class="drop-accent">📊</span> Import ALL Guild Reports</button>
@@ -564,7 +564,7 @@ body.viewer-mode .viewer-badge { display:inline-flex !important; }
     </div>
     <!-- Share & Export -->
     <div class="toolbar-group">
-      <button class="toolbar-btn" title="Share & Export">📤 SHARE ▾</button>
+      <button class="toolbar-btn" onclick="toggleToolbarDrop(this)" title="Share & Export">📤 SHARE ▾</button>
       <div class="toolbar-dropdown">
         <button class="toolbar-drop-item" onclick="generateShareLink()"><span>📤</span> Share Raider Link</button>
         <button class="toolbar-drop-item" onclick="downloadXLSX()"><span>📥</span> Download XLSX</button>
@@ -591,6 +591,27 @@ body.viewer-mode .viewer-badge { display:inline-flex !important; }
 <div class="content" id="content"></div>
 
 <script>
+// ═══════════════════════════════════════════
+// TOOLBAR DROPDOWN TOGGLE
+// ═══════════════════════════════════════════
+function toggleToolbarDrop(btn) {
+  var group = btn.parentElement;
+  var wasOpen = group.classList.contains('open');
+  // Close all dropdowns first
+  document.querySelectorAll('.toolbar-group.open').forEach(function(g) { g.classList.remove('open'); });
+  // Toggle this one
+  if (!wasOpen) group.classList.add('open');
+}
+// Close dropdowns when clicking outside or clicking a dropdown item
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.toolbar-group')) {
+    document.querySelectorAll('.toolbar-group.open').forEach(function(g) { g.classList.remove('open'); });
+  }
+  if (e.target.closest('.toolbar-drop-item')) {
+    document.querySelectorAll('.toolbar-group.open').forEach(function(g) { g.classList.remove('open'); });
+  }
+});
+
 // ═══════════════════════════════════════════
 // PASTE EXTRACTED DATA HERE
 // ═══════════════════════════════════════════
