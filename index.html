@@ -351,6 +351,13 @@ body.light-theme .btn:hover { background:rgba(10,122,138,0.08); }
 body.light-theme .btn.primary { background:rgba(10,122,138,0.1); border-color:#065a66; color:#033a44; }
 body.light-theme .del-btn { color:#cc4455; }
 body.light-theme .lock-toggle { border-color:#cc2233; color:#cc2233; text-shadow:none; }
+body.light-theme .toolbar-btn { border-color:#c0c4cc; color:#3a4a5a; }
+body.light-theme .toolbar-btn:hover { border-color:#065a66; color:#033a44; }
+body.light-theme .toolbar-btn.accent-green { border-color:#1a7a3a; color:#1a6a3a; }
+body.light-theme .toolbar-dropdown { background:#fff; border-color:#065a66; }
+body.light-theme .toolbar-drop-item { color:#333; border-bottom-color:#e8eaee; }
+body.light-theme .toolbar-drop-item:hover { background:rgba(10,122,138,0.06); color:#033a44; }
+body.light-theme .toolbar-sep { background:#d8dbe0; }
 body.light-theme .draw-tool { background:#e8eaee; border-color:#bbc; color:#444; }
 body.light-theme .draw-tool:hover { border-color:#065a66; background:#dfe2e8; }
 body.light-theme .draw-tool.active { background:rgba(10,122,138,0.15); border-color:#065a66; box-shadow:none; }
@@ -469,18 +476,28 @@ body.light-theme .font-label, body.light-theme label[style*="color:#6a8a9a"] { c
   body { font-size:14px; }
 }
 
+/* ═══ TOOLBAR DROPDOWNS ═══ */
+.toolbar-group { position:relative; display:inline-block; }
+.toolbar-btn { font-family:'Share Tech Mono',monospace; font-size:11px; font-weight:700; padding:5px 10px; background:transparent; border:1px solid var(--border); color:var(--text-sub); cursor:pointer; letter-spacing:1px; transition:all .15s; white-space:nowrap; }
+.toolbar-btn:hover { border-color:var(--neon-cyan); color:var(--neon-cyan); }
+.toolbar-btn.accent-green { border-color:var(--neon-green); color:var(--neon-green); }
+.toolbar-btn.accent-green:hover { background:rgba(0,255,136,0.08); }
+.toolbar-dropdown { display:none; position:absolute; top:100%; right:0; z-index:150; background:#14142a; border:1px solid var(--neon-cyan); min-width:180px; margin-top:2px; }
+.toolbar-group:hover .toolbar-dropdown, .toolbar-group.open .toolbar-dropdown { display:block; }
+.toolbar-drop-item { font-family:'Share Tech Mono',monospace; font-size:11px; font-weight:700; padding:8px 14px; color:var(--text-sub); cursor:pointer; border-bottom:1px solid #1a1a34; display:flex; align-items:center; gap:8px; transition:all .1s; white-space:nowrap; background:none; border-left:none; border-right:none; border-top:none; width:100%; text-align:left; }
+.toolbar-drop-item:last-child { border-bottom:none; }
+.toolbar-drop-item:hover { background:rgba(0,240,255,0.06); color:var(--neon-cyan); }
+.toolbar-drop-item .drop-accent { color:var(--neon-green); }
+.toolbar-drop-item .drop-warn { color:var(--neon-orange); }
+.toolbar-sep { height:1px; background:#2a2a44; margin:2px 0; }
+.header-actions { margin-left:auto; display:flex; gap:4px; align-items:center; }
+
 /* ═══ VIEWER MODE (shared raider link — read-only) ═══ */
 /* Hide credential/admin buttons */
 body.viewer-mode #lockBtn { display:none !important; }
 body.viewer-mode button[onclick*="openGuildSettings"] { display:none !important; }
-body.viewer-mode button[onclick*="cloudSave"] { display:none !important; }
-body.viewer-mode button[onclick*="cloudLoad"] { display:none !important; }
-body.viewer-mode button[onclick*="cloudHistory"] { display:none !important; }
-body.viewer-mode button[onclick*="openKeyModal"] { display:none !important; }
-body.viewer-mode button[onclick*="quickSave"] { display:none !important; }
-body.viewer-mode button[onclick*="generateShareLink"] { display:none !important; }
-body.viewer-mode button[onclick*="downloadXLSX"] { display:none !important; }
-body.viewer-mode button[onclick*="openWclUserTokenModal"] { display:none !important; }
+body.viewer-mode .toolbar-group:has(button[onclick*="cloudSave"]) { display:none !important; }
+body.viewer-mode .toolbar-group:has(button[onclick*="generateShareLink"]) { display:none !important; }
 /* Lock all assignment editing */
 body.viewer-mode .assign-input { pointer-events:none !important; border-bottom-color:transparent !important; }
 body.viewer-mode .cd-input { pointer-events:none !important; }
@@ -524,20 +541,43 @@ body.viewer-mode .viewer-badge { display:inline-flex !important; }
     <button class="nav-tab" onclick="switchView('performance')">📊 Performance</button>
   </nav>
   <div class="header-actions">
-    <button class="btn" onclick="openGuildSettings()" title="Guild Settings" style="font-size:12px;padding:4px 8px">⚙</button>
-    <button class="btn" onclick="cloudSave()" title="Save to Cloud" style="font-size:10px;border-color:var(--neon-green);color:var(--neon-green)">☁️ SAVE</button>
-    <button class="btn" onclick="cloudLoad()" title="Load from Cloud" style="font-size:10px">☁️ LOAD</button>
-    <button class="btn" onclick="cloudHistory()" title="Cloud History" style="font-size:10px">📜 HISTORY</button>
-    <button class="btn" onclick="importWCLReport()" title="Import single report" style="font-size:10px;border-color:var(--neon-orange);color:var(--neon-orange)">📊 WCL</button>
-    <button class="btn" onclick="importAllWCL()" title="Import ALL guild reports" style="font-size:10px;border-color:var(--neon-green);color:var(--neon-green)">📊 ALL</button>
-    <button class="btn" onclick="openWclUserTokenModal()" title="WCL Premium Login — unlock archived reports" style="font-size:10px;border-color:var(--neon-green);color:var(--neon-green)">🔑</button>
-    <button class="btn" onclick="generateShareLink()" title="Share Link" style="font-size:10px">📤 SHARE</button>
-    <button class="btn" onclick="downloadXLSX()" title="Download Spreadsheet" style="font-size:10px">📥 XLSX</button>
-    <button class="btn" id="themeToggle" onclick="toggleTheme()" title="Toggle Theme" style="font-size:12px;padding:4px 8px">☀️</button>
-    <button class="btn" onclick="openKeyModal('save')">SAVE KEY</button>
-    <button class="btn" onclick="openKeyModal('load')">LOAD KEY</button>
+    <!-- Cloud -->
+    <div class="toolbar-group">
+      <button class="toolbar-btn accent-green" title="Cloud Save & Load">☁️ CLOUD ▾</button>
+      <div class="toolbar-dropdown">
+        <button class="toolbar-drop-item" onclick="cloudSave()"><span class="drop-accent">⬆</span> Save to Cloud</button>
+        <button class="toolbar-drop-item" onclick="cloudLoad()"><span>⬇</span> Load from Cloud</button>
+        <button class="toolbar-drop-item" onclick="cloudHistory()"><span>📜</span> Version History</button>
+        <div class="toolbar-sep"></div>
+        <button class="toolbar-drop-item" onclick="quickSave()"><span class="drop-accent">💾</span> Quick Save (Local)</button>
+      </div>
+    </div>
+    <!-- WCL -->
+    <div class="toolbar-group">
+      <button class="toolbar-btn" title="WarcraftLogs Import" style="border-color:var(--neon-orange);color:var(--neon-orange)">📊 WCL ▾</button>
+      <div class="toolbar-dropdown">
+        <button class="toolbar-drop-item" onclick="importWCLReport()"><span class="drop-warn">📊</span> Import Single Report</button>
+        <button class="toolbar-drop-item" onclick="importAllWCL()"><span class="drop-accent">📊</span> Import ALL Guild Reports</button>
+        <div class="toolbar-sep"></div>
+        <button class="toolbar-drop-item" onclick="openWclUserTokenModal()"><span>🔑</span> WCL Premium Login</button>
+      </div>
+    </div>
+    <!-- Share & Export -->
+    <div class="toolbar-group">
+      <button class="toolbar-btn" title="Share & Export">📤 SHARE ▾</button>
+      <div class="toolbar-dropdown">
+        <button class="toolbar-drop-item" onclick="generateShareLink()"><span>📤</span> Share Raider Link</button>
+        <button class="toolbar-drop-item" onclick="downloadXLSX()"><span>📥</span> Download XLSX</button>
+        <button class="toolbar-drop-item" onclick="exportRaidMRT()"><span>📋</span> Export MRT (All Bosses)</button>
+        <div class="toolbar-sep"></div>
+        <button class="toolbar-drop-item" onclick="openKeyModal('save')"><span>🔐</span> Save Raid Key</button>
+        <button class="toolbar-drop-item" onclick="openKeyModal('load')"><span>🔓</span> Load Raid Key</button>
+      </div>
+    </div>
+    <!-- Standalone -->
+    <button class="toolbar-btn" onclick="openGuildSettings()" title="Guild Settings">⚙</button>
+    <button class="toolbar-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle Theme">☀️</button>
     <button class="lock-toggle" id="lockBtn" onclick="toggleLock()">🔓 UNLOCKED</button>
-    <button class="btn primary" onclick="quickSave()">QUICK SAVE</button>
   </div>
 </div>
 
@@ -3561,11 +3601,13 @@ function importWCLReportSilent(reportCode, callback) {
         }
       });
       
-      // DPS for kills
+      // DPS + Healing + DamageTaken for kills
       var killFights = report.fights.filter(function(f){return f.kill && f.encounterID;});
       if (killFights.length) {
         var tableQueries = killFights.map(function(f) {
-          return 'fight' + f.id + ': table(dataType: DamageDone, fightIDs: [' + f.id + '])';
+          return 'dmg' + f.id + ': table(dataType: DamageDone, fightIDs: [' + f.id + '])' +
+                 ' heal' + f.id + ': table(dataType: Healing, fightIDs: [' + f.id + '])' +
+                 ' dtaken' + f.id + ': table(dataType: DamageTaken, fightIDs: [' + f.id + '])';
         }).join(' ');
         var dpsQuery = '{ reportData { report(code: "' + reportCode + '") { ' + tableQueries + ' } } }';
         
@@ -3575,7 +3617,9 @@ function importWCLReportSilent(reportCode, callback) {
             var dpsReport = dpsData.reportData.report;
             
             killFights.forEach(function(fight) {
-              var tableData = dpsReport['fight' + fight.id];
+              var tableData = dpsReport['dmg' + fight.id];
+              var healData = dpsReport['heal' + fight.id];
+              var dtakenData = dpsReport['dtaken' + fight.id];
               if (!tableData || !tableData.data || !tableData.data.entries) return;
               
               var mb = null, mr = null, bs2 = 0;
@@ -3597,6 +3641,13 @@ function importWCLReportSilent(reportCode, callback) {
               if (!assignments[gKey].growth) assignments[gKey].growth = [];
               
               var PET_TYPES2 = ['Pet','NPC','Boss','Unknown','Creature','pet'];
+              var healMap2 = {}, dtakenMap2 = {};
+              if (healData && healData.data && healData.data.entries) {
+                healData.data.entries.forEach(function(e) { if (e.name) healMap2[e.name] = e.total || 0; });
+              }
+              if (dtakenData && dtakenData.data && dtakenData.data.entries) {
+                dtakenData.data.entries.forEach(function(e) { if (e.name) dtakenMap2[e.name] = e.total || 0; });
+              }
               tableData.data.entries.forEach(function(entry) {
                 if (!entry.name) return;
                 if (PET_TYPES2.indexOf(entry.type) !== -1) return;
@@ -3606,6 +3657,8 @@ function importWCLReportSilent(reportCode, callback) {
                 assignments[gKey].growth.push({
                   player: rMatch2 ? rMatch2.name : entry.name,
                   dps: Math.round(entry.total / dur2),
+                  hps: Math.round((healMap2[entry.name] || 0) / dur2),
+                  dtps: Math.round((dtakenMap2[entry.name] || 0) / dur2),
                   parse: 0, deaths: 0,
                   notes: 'WCL ' + dateStr,
                   cls: rMatch2 ? rMatch2.cls : (entry.type || ''),
@@ -3614,6 +3667,8 @@ function importWCLReportSilent(reportCode, callback) {
                   reportCode: reportCode,
                   fightId: fight.id,
                   totalDamage: entry.total || 0,
+                  totalHealing: healMap2[entry.name] || 0,
+                  totalDamageTaken: dtakenMap2[entry.name] || 0,
                   fightDuration: Math.round(dur2)
                 });
               });
@@ -3788,11 +3843,13 @@ function importWCLReport(reportCode) {
         }).catch(function(e) { console.log('Deaths import error:', e); });
       }
 
-      // Now fetch DPS rankings for kill fights
+      // Now fetch DPS + Healing + DamageTaken for kill fights
       var killFights = report.fights.filter(function(f) { return f.kill && f.encounterID; });
       if (killFights.length) {
         var tableQueries = killFights.map(function(f) {
-          return 'fight' + f.id + ': table(dataType: DamageDone, fightIDs: [' + f.id + '])';
+          return 'dmg' + f.id + ': table(dataType: DamageDone, fightIDs: [' + f.id + '])' +
+                 ' heal' + f.id + ': table(dataType: Healing, fightIDs: [' + f.id + '])' +
+                 ' dtaken' + f.id + ': table(dataType: DamageTaken, fightIDs: [' + f.id + '])';
         }).join(' ');
         var dpsQuery = '{ reportData { report(code: "' + reportCode + '") { ' + tableQueries + ' } } }';
         
@@ -3802,7 +3859,9 @@ function importWCLReport(reportCode) {
             var dpsReport = dpsData.reportData.report;
             
             killFights.forEach(function(fight) {
-              var tableData = dpsReport['fight' + fight.id];
+              var tableData = dpsReport['dmg' + fight.id];
+              var healData = dpsReport['heal' + fight.id];
+              var dtakenData = dpsReport['dtaken' + fight.id];
               if (!tableData || !tableData.data || !tableData.data.entries) return;
               
               // Find matching boss
@@ -3829,6 +3888,14 @@ function importWCLReport(reportCode) {
               if (!assignments[gKey].growth) assignments[gKey].growth = [];
               
               var PET_TYPES = ['Pet','NPC','Boss','Unknown','Creature','pet'];
+              // Build healing + dtaken lookup maps
+              var healMap = {}, dtakenMap = {};
+              if (healData && healData.data && healData.data.entries) {
+                healData.data.entries.forEach(function(e) { if (e.name) healMap[e.name] = e.total || 0; });
+              }
+              if (dtakenData && dtakenData.data && dtakenData.data.entries) {
+                dtakenData.data.entries.forEach(function(e) { if (e.name) dtakenMap[e.name] = e.total || 0; });
+              }
               tableData.data.entries.forEach(function(entry) {
                 if (!entry.name) return;
                 if (PET_TYPES.indexOf(entry.type) !== -1) return;
@@ -3839,6 +3906,8 @@ function importWCLReport(reportCode) {
                 assignments[gKey].growth.push({
                   player: rMatch ? rMatch.name : entry.name,
                   dps: Math.round(entry.total / durationSec),
+                  hps: Math.round((healMap[entry.name] || 0) / durationSec),
+                  dtps: Math.round((dtakenMap[entry.name] || 0) / durationSec),
                   parse: 0,
                   deaths: 0,
                   notes: 'WCL ' + dateStr,
@@ -3848,6 +3917,8 @@ function importWCLReport(reportCode) {
                   reportCode: reportCode,
                   fightId: fight.id,
                   totalDamage: entry.total || 0,
+                  totalHealing: healMap[entry.name] || 0,
+                  totalDamageTaken: dtakenMap[entry.name] || 0,
                   fightDuration: Math.round(durationSec)
                 });
               });
@@ -4504,15 +4575,19 @@ function renderPerformanceView(container) {
   var pd = collectPerfData(filterRaid);
   var h = renderRaidFilter(filterRaid);
   // Sub-tabs
-  h += '<div style="display:flex;gap:2px;margin-bottom:14px">';
-  ['overview','rankings'].forEach(function(t) {
-    var label = t === 'overview' ? '📊 Overview' : '🏆 Rankings';
+  h += '<div style="display:flex;gap:2px;margin-bottom:14px;flex-wrap:wrap">';
+  ['overview','rankings','healing','survivability','tanks','reportcard'].forEach(function(t) {
+    var labels = {overview:'📊 Overview', rankings:'🏆 Rankings', healing:'💚 Healing', survivability:'🛡 Survivability', tanks:'🛡 Tank Metrics', reportcard:'📝 Report Card'};
     var active = sub === t;
-    h += '<button class="nav-tab' + (active?' active':'') + '" style="font-size:11px;padding:5px 14px" onclick="window._perfSub=\'' + t + '\';switchView(\'performance\')">' + label + '</button>';
+    h += '<button class="nav-tab' + (active?' active':'') + '" style="font-size:11px;padding:5px 14px" onclick="window._perfSub=\'' + t + '\';switchView(\'performance\')">' + labels[t] + '</button>';
   });
   h += '</div>';
   if (sub === 'overview') h += renderPerfOverview(pd);
-  else h += renderPerfRankings(pd);
+  else if (sub === 'rankings') h += renderPerfRankings(pd);
+  else if (sub === 'healing') h += renderHealingTab(pd);
+  else if (sub === 'survivability') h += renderSurvivabilityTab(pd);
+  else if (sub === 'tanks') h += renderTankTab(pd);
+  else if (sub === 'reportcard') h += renderReportCard(pd);
   container.innerHTML = h;
 }
 
@@ -4919,6 +4994,423 @@ function collectAllGrowth() {
     });
   });
   return all;
+}
+
+// ═══════════════════════════════════════════
+// HEALING TAB
+// ═══════════════════════════════════════════
+function renderHealingTab(pd) {
+  var h = '';
+  // Collect HPS data from growth entries
+  var healerData = {};
+  RAIDS.forEach(function(raid) {
+    raid.bosses.forEach(function(boss) {
+      var key = raid.id + '_' + boss.id;
+      var a = assignments[key];
+      if (!a || !a.growth) return;
+      a.growth.forEach(function(g) {
+        if (!g.player || !g.hps) return;
+        if (!healerData[g.player]) healerData[g.player] = {name:g.player, cls:g.cls||'', fights:[], totalHPS:0, totalHealing:0};
+        healerData[g.player].fights.push({boss:g.boss||boss.name, hps:g.hps, totalHealing:g.totalHealing||0, date:g.date||'', duration:g.fightDuration||0});
+        healerData[g.player].totalHPS += g.hps;
+        healerData[g.player].totalHealing += g.totalHealing || 0;
+      });
+    });
+  });
+  var healers = Object.values(healerData).filter(function(h){return h.fights.length>0;});
+  healers.forEach(function(h){h.avgHPS = Math.round(h.totalHPS / h.fights.length);});
+  healers.sort(function(a,b){return b.avgHPS - a.avgHPS;});
+  
+  if (!healers.length) {
+    h += '<div class="data-card"><div class="data-card-header">💚 HEALING LEADERBOARD</div>';
+    h += '<div style="color:var(--text-sub);padding:20px;text-align:center">No healing data yet. Re-import WCL reports to populate healing metrics.</div></div>';
+    return h;
+  }
+  
+  h += '<div class="data-card"><div class="data-card-header">💚 HEALING LEADERBOARD — AVG HPS</div>';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:13px;font-family:Share Tech Mono,monospace">';
+  h += '<thead><tr style="color:#555;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px">#</th><th style="text-align:left;padding:6px">PLAYER</th><th style="text-align:left;padding:6px">CLASS</th><th style="text-align:right;padding:6px">AVG HPS</th><th style="text-align:right;padding:6px">TOTAL HEALING</th><th style="text-align:right;padding:6px">FIGHTS</th></tr></thead><tbody>';
+  var maxHPS = healers[0] ? healers[0].avgHPS : 1;
+  healers.forEach(function(p, i) {
+    var cc = CLASS_COLORI_MAP[p.cls] || '#888';
+    var barW = Math.round(p.avgHPS / maxHPS * 100);
+    h += '<tr style="border-bottom:1px solid #1a1a34">';
+    h += '<td style="padding:5px 6px;color:#555;font-weight:900">' + (i+1) + '</td>';
+    h += '<td style="padding:5px 6px"><span class="perf-player-link" style="color:'+cc+';font-weight:900" onclick="window._perfPlayer=\''+p.name.replace(/'/g,"\\'")+'\';switchView(\'performance\')">' + p.name + '</span></td>';
+    h += '<td style="padding:5px 6px;color:'+cc+'">' + p.cls + '</td>';
+    h += '<td style="padding:5px 6px;text-align:right"><div style="display:flex;align-items:center;justify-content:flex-end;gap:6px"><div style="width:100px;height:10px;background:#1a1a34;position:relative"><div style="width:'+barW+'%;height:100%;background:var(--neon-green)"></div></div><span style="color:var(--neon-green);font-weight:900">'+p.avgHPS.toLocaleString()+'</span></div></td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:var(--text-sub)">' + fmtK(p.totalHealing) + '</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#555">' + p.fights.length + '</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  
+  // Healing over time chart (last 8 raid nights)
+  var healerNames = healers.filter(function(p){return p.avgHPS > 200;}).slice(0,6).map(function(p){return p.name;});
+  if (healerNames.length) {
+    h += '<div class="data-card"><div class="data-card-header">💚 HPS TREND — TOP HEALERS</div>';
+    h += renderMultiLineTrend(healerNames, 'hps');
+    h += '</div>';
+  }
+  return h;
+}
+
+// ═══════════════════════════════════════════
+// SURVIVABILITY TAB
+// ═══════════════════════════════════════════
+function renderSurvivabilityTab(pd) {
+  var h = '';
+  var playerData = {};
+  RAIDS.forEach(function(raid) {
+    raid.bosses.forEach(function(boss) {
+      var key = raid.id + '_' + boss.id;
+      var a = assignments[key];
+      if (!a || !a.growth) return;
+      a.growth.forEach(function(g) {
+        if (!g.player) return;
+        if (!playerData[g.player]) playerData[g.player] = {name:g.player, cls:g.cls||'', fights:0, totalDeaths:0, totalDTPS:0, totalDamageTaken:0};
+        playerData[g.player].fights++;
+        playerData[g.player].totalDeaths += g.deaths || 0;
+        playerData[g.player].totalDTPS += g.dtps || 0;
+        playerData[g.player].totalDamageTaken += g.totalDamageTaken || 0;
+      });
+    });
+  });
+  var players = Object.values(playerData).filter(function(p){return p.fights>=3;});
+  players.forEach(function(p){
+    p.avgDTPS = Math.round(p.totalDTPS / p.fights);
+    p.deathRate = (p.totalDeaths / p.fights).toFixed(2);
+    p.survScore = Math.max(0, 100 - (p.totalDeaths / p.fights * 30) - (p.avgDTPS > 200 ? (p.avgDTPS - 200) / 20 : 0));
+    p.survScore = Math.round(Math.min(100, p.survScore));
+  });
+  
+  // Best survivors = lowest deaths + lowest DTPS
+  players.sort(function(a,b){return b.survScore - a.survScore;});
+  
+  if (!players.length) {
+    h += '<div class="data-card"><div class="data-card-header">🛡 SURVIVABILITY</div>';
+    h += '<div style="color:var(--text-sub);padding:20px;text-align:center">Need 3+ fights per player. Import more WCL reports.</div></div>';
+    return h;
+  }
+  
+  h += '<div class="data-card"><div class="data-card-header">🛡 SURVIVABILITY RANKINGS — WHO STAYS ALIVE</div>';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:13px;font-family:Share Tech Mono,monospace">';
+  h += '<thead><tr style="color:#555;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px">#</th><th style="text-align:left;padding:6px">PLAYER</th><th style="text-align:left;padding:6px">CLASS</th><th style="text-align:right;padding:6px">SURV SCORE</th><th style="text-align:right;padding:6px">DEATHS/FIGHT</th><th style="text-align:right;padding:6px">AVG DTPS</th><th style="text-align:right;padding:6px">FIGHTS</th></tr></thead><tbody>';
+  players.forEach(function(p, i) {
+    var cc = CLASS_COLORI_MAP[p.cls] || '#888';
+    var scoreColor = p.survScore >= 80 ? 'var(--neon-green)' : p.survScore >= 50 ? 'var(--neon-orange)' : 'var(--neon-red)';
+    h += '<tr style="border-bottom:1px solid #1a1a34">';
+    h += '<td style="padding:5px 6px;color:#555;font-weight:900">' + (i+1) + '</td>';
+    h += '<td style="padding:5px 6px"><span class="perf-player-link" style="color:'+cc+';font-weight:900" onclick="window._perfPlayer=\''+p.name.replace(/'/g,"\\'")+'\';switchView(\'performance\')">' + p.name + '</span></td>';
+    h += '<td style="padding:5px 6px;color:'+cc+'">' + p.cls + '</td>';
+    h += '<td style="padding:5px 6px;text-align:right;font-weight:900;color:'+scoreColor+'">' + p.survScore + '</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:'+(parseFloat(p.deathRate)>0.5?'var(--neon-red)':'var(--neon-green)')+'">' + p.deathRate + '</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:var(--neon-orange)">' + p.avgDTPS.toLocaleString() + '</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#555">' + p.fights + '</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  
+  // Deaths leaderboard (worst offenders)
+  var deathSorted = players.slice().sort(function(a,b){return b.totalDeaths - a.totalDeaths;}).filter(function(p){return p.totalDeaths>0;});
+  if (deathSorted.length) {
+    h += '<div class="data-card"><div class="data-card-header">☠ DEATH COUNT — TOTAL ACROSS ALL RAIDS</div>';
+    h += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
+    deathSorted.slice(0,15).forEach(function(p) {
+      var cc = CLASS_COLORI_MAP[p.cls] || '#888';
+      h += '<div style="background:#1a1a34;border:1px solid #2a2a44;padding:8px 14px;text-align:center;min-width:100px">';
+      h += '<div style="font-weight:900;color:'+cc+';font-size:13px">'+p.name+'</div>';
+      h += '<div style="font-size:24px;font-weight:900;color:var(--neon-red);font-family:Orbitron,sans-serif">'+p.totalDeaths+'</div>';
+      h += '<div style="font-size:9px;color:#555">deaths / '+p.fights+' fights</div>';
+      h += '</div>';
+    });
+    h += '</div></div>';
+  }
+  return h;
+}
+
+// ═══════════════════════════════════════════
+// TANK METRICS TAB
+// ═══════════════════════════════════════════
+function renderTankTab(pd) {
+  var h = '';
+  var TANK_CLASSES = ['Warrior','Paladin','Druid'];
+  
+  // Step 1: Find confirmed tanks from assignment data
+  var confirmedTanks = {};
+  RAIDS.forEach(function(raid) {
+    raid.bosses.forEach(function(boss) {
+      var key = raid.id + '_' + boss.id;
+      var a = assignments[key];
+      if (!a) return;
+      (a.tanks||[]).forEach(function(name) { if (name) confirmedTanks[name] = true; });
+      // Also check raid comp for tank roles
+      if (a.raidComp) Object.keys(a.raidComp).forEach(function(g) {
+        Object.keys(a.raidComp[g]||{}).forEach(function(s) {
+          var slot = a.raidComp[g][s];
+          if (slot && slot.role === 'tank') confirmedTanks[slot.name] = true;
+        });
+      });
+    });
+  });
+  
+  // Step 2: Collect data for tank-capable classes
+  var tankData = {};
+  var allPlayerDTPS = [];
+  RAIDS.forEach(function(raid) {
+    raid.bosses.forEach(function(boss) {
+      var key = raid.id + '_' + boss.id;
+      var a = assignments[key];
+      if (!a || !a.growth) return;
+      a.growth.forEach(function(g) {
+        if (!g.player) return;
+        if (g.dtps) allPlayerDTPS.push(g.dtps);
+        var r = GUILD_ROSTER.find(function(r){return r.name===g.player;});
+        var cls = g.cls || (r ? r.cls : '');
+        if (TANK_CLASSES.indexOf(cls) === -1) return;
+        if (!tankData[g.player]) tankData[g.player] = {name:g.player, cls:cls, fights:[], totalDPS:0, totalDTPS:0, totalDeaths:0, totalDamageTaken:0, isConfirmed: !!confirmedTanks[g.player]};
+        tankData[g.player].fights.push({boss:g.boss||boss.name, dps:g.dps||0, dtps:g.dtps||0, deaths:g.deaths||0, date:g.date||'', duration:g.fightDuration||0});
+        tankData[g.player].totalDPS += g.dps || 0;
+        tankData[g.player].totalDTPS += g.dtps || 0;
+        tankData[g.player].totalDeaths += g.deaths || 0;
+        tankData[g.player].totalDamageTaken += g.totalDamageTaken || 0;
+      });
+    });
+  });
+  
+  // Step 3: Filter to actual tanks — confirmed via assignments OR high DTPS (top 25% = likely tanking)
+  allPlayerDTPS.sort(function(a,b){return a-b;});
+  var dtpsThreshold = allPlayerDTPS.length > 4 ? allPlayerDTPS[Math.floor(allPlayerDTPS.length * 0.75)] : 200;
+  dtpsThreshold = Math.max(dtpsThreshold, 200); // minimum 200 DTPS to be considered a tank
+  
+  var tanks = Object.values(tankData).filter(function(t){
+    if (t.fights.length < 2) return false;
+    t.avgDTPS = Math.round(t.totalDTPS / t.fights.length);
+    return t.isConfirmed || t.avgDTPS >= dtpsThreshold;
+  });
+  tanks.forEach(function(t){
+    t.avgDPS = Math.round(t.totalDPS / t.fights.length);
+    t.avgDTPS = Math.round(t.totalDTPS / t.fights.length);
+    t.deathRate = (t.totalDeaths / t.fights.length).toFixed(2);
+    // TPS estimate: tank DPS × 1.3 (defiance) roughly
+    t.estTPS = Math.round(t.avgDPS * 1.3);
+  });
+  tanks.sort(function(a,b){return b.avgDPS - a.avgDPS;});
+  
+  if (!tanks.length) {
+    h += '<div class="data-card"><div class="data-card-header">🛡 TANK METRICS</div>';
+    h += '<div style="color:var(--text-sub);padding:20px;text-align:center">No tanks detected. Assign tanks in boss assignments, or import WCL reports — players with high DTPS are auto-detected.</div></div>';
+    return h;
+  }
+  
+  h += '<div class="data-card"><div class="data-card-header">🛡 TANK COMPARISON</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">';
+  tanks.forEach(function(t) {
+    var cc = CLASS_COLORI_MAP[t.cls] || '#888';
+    h += '<div style="background:#1a1a34;border:1px solid #2a2a44;padding:16px">';
+    h += '<div style="font-family:Orbitron,sans-serif;font-size:16px;font-weight:900;color:'+cc+';margin-bottom:10px">'+t.name+'<span style="font-size:10px;color:#555;margin-left:8px">'+t.cls+'</span>'+(t.isConfirmed?' <span style="font-size:8px;padding:2px 6px;background:rgba(0,240,255,0.1);border:1px solid var(--neon-cyan);color:var(--neon-cyan);letter-spacing:1px">ASSIGNED TANK</span>':' <span style="font-size:8px;padding:2px 6px;background:rgba(255,102,0,0.1);border:1px solid var(--neon-orange);color:var(--neon-orange);letter-spacing:1px">AUTO-DETECTED</span>')+'</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+    // DPS (TPS proxy)
+    h += '<div style="text-align:center;padding:8px;background:#14142a;border:1px solid #2a2a44"><div style="font-size:9px;color:#555;letter-spacing:1px">AVG DPS</div><div style="font-size:20px;font-weight:900;color:var(--neon-cyan);font-family:Orbitron,sans-serif">'+t.avgDPS.toLocaleString()+'</div></div>';
+    // Est TPS
+    h += '<div style="text-align:center;padding:8px;background:#14142a;border:1px solid #2a2a44"><div style="font-size:9px;color:#555;letter-spacing:1px">EST TPS</div><div style="font-size:20px;font-weight:900;color:var(--neon-orange);font-family:Orbitron,sans-serif">'+t.estTPS.toLocaleString()+'</div></div>';
+    // DTPS
+    h += '<div style="text-align:center;padding:8px;background:#14142a;border:1px solid #2a2a44"><div style="font-size:9px;color:#555;letter-spacing:1px">AVG DTPS</div><div style="font-size:20px;font-weight:900;color:var(--neon-red);font-family:Orbitron,sans-serif">'+t.avgDTPS.toLocaleString()+'</div></div>';
+    // Deaths
+    h += '<div style="text-align:center;padding:8px;background:#14142a;border:1px solid #2a2a44"><div style="font-size:9px;color:#555;letter-spacing:1px">DEATHS/FIGHT</div><div style="font-size:20px;font-weight:900;color:'+(parseFloat(t.deathRate)>0.3?'var(--neon-red)':'var(--neon-green)')+';font-family:Orbitron,sans-serif">'+t.deathRate+'</div></div>';
+    h += '</div>';
+    // Per-boss breakdown
+    h += '<div style="margin-top:10px;font-size:10px;font-family:Share Tech Mono,monospace">';
+    var bossFights = {};
+    t.fights.forEach(function(f){
+      if (!bossFights[f.boss]) bossFights[f.boss] = {dps:[], dtps:[], deaths:0};
+      bossFights[f.boss].dps.push(f.dps);
+      bossFights[f.boss].dtps.push(f.dtps);
+      bossFights[f.boss].deaths += f.deaths;
+    });
+    Object.keys(bossFights).forEach(function(bn) {
+      var bf = bossFights[bn];
+      var avgD = Math.round(bf.dps.reduce(function(a,b){return a+b;},0)/bf.dps.length);
+      var avgDT = Math.round(bf.dtps.reduce(function(a,b){return a+b;},0)/bf.dtps.length);
+      h += '<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #1a1a34"><span style="color:var(--text)">'+bn+'</span><span><span style="color:var(--neon-cyan)">'+avgD+'</span> dps / <span style="color:var(--neon-red)">'+avgDT+'</span> dtps'+(bf.deaths?' / <span style="color:var(--neon-red)">'+bf.deaths+'☠</span>':'')+'</span></div>';
+    });
+    h += '</div>';
+    h += '<div style="font-size:10px;color:#555;margin-top:6px;text-align:right">'+t.fights.length+' fights total</div>';
+    h += '</div>';
+  });
+  h += '</div></div>';
+  return h;
+}
+
+// ═══════════════════════════════════════════
+// REPORT CARD TAB
+// ═══════════════════════════════════════════
+function renderReportCard(pd) {
+  var h = '';
+  var playerStats = {};
+  var allDates = {};
+  
+  RAIDS.forEach(function(raid) {
+    raid.bosses.forEach(function(boss) {
+      var key = raid.id + '_' + boss.id;
+      var a = assignments[key];
+      if (!a || !a.growth) return;
+      a.growth.forEach(function(g) {
+        if (!g.player) return;
+        if (!playerStats[g.player]) playerStats[g.player] = {name:g.player, cls:g.cls||'', dpsAll:[], dates:{}, totalDeaths:0, fights:0};
+        playerStats[g.player].dpsAll.push(g.dps||0);
+        playerStats[g.player].fights++;
+        playerStats[g.player].totalDeaths += g.deaths||0;
+        if (g.date) { playerStats[g.player].dates[g.date] = true; allDates[g.date] = true; }
+      });
+    });
+  });
+  
+  var totalRaidNights = Object.keys(allDates).length || 1;
+  var players = Object.values(playerStats).filter(function(p){return p.fights>=3;});
+  
+  players.forEach(function(p) {
+    p.avgDPS = Math.round(p.dpsAll.reduce(function(a,b){return a+b;},0) / p.dpsAll.length);
+    p.attendance = Math.round(Object.keys(p.dates).length / totalRaidNights * 100);
+    p.deathRate = (p.totalDeaths / p.fights).toFixed(2);
+    // Improvement: compare first half vs second half
+    var half = Math.floor(p.dpsAll.length / 2);
+    var firstHalf = p.dpsAll.slice(0, half);
+    var secondHalf = p.dpsAll.slice(half);
+    var avgFirst = firstHalf.length ? firstHalf.reduce(function(a,b){return a+b;},0)/firstHalf.length : 0;
+    var avgSecond = secondHalf.length ? secondHalf.reduce(function(a,b){return a+b;},0)/secondHalf.length : 0;
+    p.improvement = avgFirst > 0 ? Math.round((avgSecond - avgFirst) / avgFirst * 100) : 0;
+    // Consistency: std deviation / mean
+    var mean = p.avgDPS;
+    var variance = p.dpsAll.reduce(function(sum,v){return sum+Math.pow(v-mean,2);},0)/p.dpsAll.length;
+    p.consistency = mean > 0 ? Math.round(100 - (Math.sqrt(variance)/mean*100)) : 0;
+    p.consistency = Math.max(0, Math.min(100, p.consistency));
+    // Letter grade
+    var score = (p.attendance * 0.25) + (Math.min(100, p.avgDPS/15) * 0.3) + (p.consistency * 0.2) + (Math.max(0, 100 - parseFloat(p.deathRate)*40) * 0.15) + (Math.min(100, 50 + p.improvement) * 0.1);
+    score = Math.round(Math.max(0, Math.min(100, score)));
+    p.score = score;
+    p.grade = score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F';
+    p.gradeColor = score >= 90 ? 'var(--neon-green)' : score >= 80 ? 'var(--neon-cyan)' : score >= 70 ? 'var(--neon-orange)' : 'var(--neon-red)';
+  });
+  
+  players.sort(function(a,b){return b.score - a.score;});
+  
+  if (!players.length) {
+    h += '<div class="data-card"><div class="data-card-header">📝 RAIDER REPORT CARD</div>';
+    h += '<div style="color:var(--text-sub);padding:20px;text-align:center">Need 3+ fights per player. Import more WCL reports.</div></div>';
+    return h;
+  }
+  
+  h += '<div class="data-card"><div class="data-card-header">📝 RAIDER REPORT CARD — WEIGHTED SCORE (Attend 25% · DPS 30% · Consistency 20% · Survival 15% · Improvement 10%)</div>';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:12px;font-family:Share Tech Mono,monospace">';
+  h += '<thead><tr style="color:#555;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px">GRADE</th><th style="text-align:left;padding:6px">PLAYER</th><th style="text-align:left;padding:6px">CLASS</th><th style="text-align:right;padding:6px">SCORE</th><th style="text-align:right;padding:6px">ATTEND</th><th style="text-align:right;padding:6px">AVG DPS</th><th style="text-align:right;padding:6px">CONSIST</th><th style="text-align:right;padding:6px">DEATHS/F</th><th style="text-align:right;padding:6px">IMPROVE</th><th style="text-align:right;padding:6px">FIGHTS</th></tr></thead><tbody>';
+  players.forEach(function(p) {
+    var cc = CLASS_COLORI_MAP[p.cls] || '#888';
+    var impColor = p.improvement > 0 ? 'var(--neon-green)' : p.improvement < -5 ? 'var(--neon-red)' : 'var(--text-sub)';
+    h += '<tr style="border-bottom:1px solid #1a1a34">';
+    h += '<td style="padding:5px 6px;font-size:18px;font-weight:900;color:'+p.gradeColor+';font-family:Orbitron,sans-serif;text-align:center">'+p.grade+'</td>';
+    h += '<td style="padding:5px 6px"><span class="perf-player-link" style="color:'+cc+';font-weight:900" onclick="window._perfPlayer=\''+p.name.replace(/'/g,"\\'")+'\';switchView(\'performance\')">' + p.name + '</span></td>';
+    h += '<td style="padding:5px 6px;color:'+cc+'">' + p.cls + '</td>';
+    h += '<td style="padding:5px 6px;text-align:right;font-weight:900;color:'+p.gradeColor+'">' + p.score + '</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:'+(p.attendance>=80?'var(--neon-green)':p.attendance>=50?'var(--neon-orange)':'var(--neon-red)')+'">'+p.attendance+'%</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:var(--neon-cyan)">' + p.avgDPS.toLocaleString() + '</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:'+(p.consistency>=70?'var(--neon-green)':'var(--neon-orange)')+'">'+p.consistency+'%</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:'+(parseFloat(p.deathRate)>0.5?'var(--neon-red)':'var(--neon-green)')+'">'+p.deathRate+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:'+impColor+'">'+(p.improvement>0?'+':'')+p.improvement+'%</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#555">'+p.fights+'</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  
+  // Grade distribution
+  var grades = {A:0,B:0,C:0,D:0,F:0};
+  players.forEach(function(p){grades[p.grade]=(grades[p.grade]||0)+1;});
+  h += '<div class="data-card"><div class="data-card-header">📊 GRADE DISTRIBUTION</div>';
+  h += '<div style="display:flex;gap:12px;justify-content:center;padding:10px 0">';
+  ['A','B','C','D','F'].forEach(function(g) {
+    var colors = {A:'var(--neon-green)',B:'var(--neon-cyan)',C:'var(--neon-orange)',D:'var(--neon-red)',F:'#aa3344'};
+    h += '<div style="text-align:center;min-width:60px"><div style="font-family:Orbitron,sans-serif;font-size:28px;font-weight:900;color:'+colors[g]+'">'+g+'</div><div style="font-size:20px;font-weight:900;color:var(--text-bright)">'+grades[g]+'</div><div style="font-size:9px;color:#555">players</div></div>';
+  });
+  h += '</div></div>';
+  
+  return h;
+}
+
+// ═══════════════════════════════════════════
+// MULTI-LINE TREND HELPER (HPS over time)
+// ═══════════════════════════════════════════
+function renderMultiLineTrend(playerNames, metric) {
+  var seriesData = {};
+  var allDates = {};
+  playerNames.forEach(function(name) { seriesData[name] = {}; });
+  
+  RAIDS.forEach(function(raid) {
+    raid.bosses.forEach(function(boss) {
+      var key = raid.id + '_' + boss.id;
+      var a = assignments[key];
+      if (!a || !a.growth) return;
+      a.growth.forEach(function(g) {
+        if (!g.player || !g.date || playerNames.indexOf(g.player) === -1) return;
+        var val = g[metric] || 0;
+        if (!val) return;
+        if (!seriesData[g.player][g.date]) seriesData[g.player][g.date] = [];
+        seriesData[g.player][g.date].push(val);
+        allDates[g.date] = true;
+      });
+    });
+  });
+  
+  var dates = Object.keys(allDates).sort();
+  if (dates.length < 2) return '<div style="color:#555;padding:10px">Not enough data points for trend</div>';
+  
+  var w = 700, ht = 250, pad = 40;
+  var colors = ['var(--neon-green)','var(--neon-cyan)','var(--neon-orange)','var(--neon-purple)','var(--neon-magenta)','var(--neon-yellow)'];
+  var maxVal = 1;
+  dates.forEach(function(d) {
+    playerNames.forEach(function(name) {
+      var vals = seriesData[name][d];
+      if (vals) {
+        var avg = Math.round(vals.reduce(function(a,b){return a+b;},0)/vals.length);
+        if (avg > maxVal) maxVal = avg;
+      }
+    });
+  });
+  
+  var h = '<svg viewBox="0 0 '+w+' '+ht+'" style="width:100%;min-height:200px">';
+  // Grid
+  for (var y=0;y<5;y++){var yy=pad+(ht-2*pad)*(1-y/4);h+='<line x1="'+pad+'" y1="'+yy+'" x2="'+(w-pad)+'" y2="'+yy+'" stroke="#1a1a34" stroke-width="1"/>';h+='<text x="'+(pad-4)+'" y="'+(yy+3)+'" fill="#555" font-size="9" text-anchor="end" font-family="Share Tech Mono,monospace">'+Math.round(maxVal*y/4)+'</text>';}
+  // Lines per player
+  playerNames.forEach(function(name, pi) {
+    var points = [];
+    dates.forEach(function(d, di) {
+      var vals = seriesData[name][d];
+      if (vals) {
+        var avg = Math.round(vals.reduce(function(a,b){return a+b;},0)/vals.length);
+        var x = pad + di * ((w - 2*pad) / (dates.length - 1));
+        var yp = pad + (ht - 2*pad) * (1 - avg / maxVal);
+        points.push(x+','+yp);
+      }
+    });
+    if (points.length > 1) {
+      h += '<polyline points="'+points.join(' ')+'" fill="none" stroke="'+colors[pi%colors.length]+'" stroke-width="2" opacity="0.8"/>';
+    }
+  });
+  // Date labels
+  dates.forEach(function(d, di) {
+    var x = pad + di * ((w - 2*pad) / (dates.length - 1));
+    var label = d.substring(5); // MM-DD
+    h += '<text x="'+x+'" y="'+(ht-5)+'" fill="#555" font-size="8" text-anchor="middle" font-family="Share Tech Mono,monospace">'+label+'</text>';
+  });
+  // Legend
+  playerNames.forEach(function(name, pi) {
+    var lx = pad + pi * 110;
+    h += '<rect x="'+lx+'" y="4" width="8" height="8" fill="'+colors[pi%colors.length]+'" opacity="0.8"/>';
+    var r2 = GUILD_ROSTER.find(function(r){return r.name===name;});
+    var cc = r2 ? (CLASS_COLORI_MAP[r2.cls]||'#888') : '#888';
+    h += '<text x="'+(lx+12)+'" y="12" fill="'+cc+'" font-size="9" font-family="Share Tech Mono,monospace" font-weight="900">'+name+'</text>';
+  });
+  h += '</svg>';
+  return h;
 }
 
 function renderPlayerProfile(container, playerName) {
