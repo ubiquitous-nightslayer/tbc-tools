@@ -2862,170 +2862,233 @@ function openSetupPanel() {
   var o = document.getElementById('setupPanel');
   if (o) { o.remove(); return; }
   
-  var hasWclCreds = !!(cfg.wclClientId && cfg.wclClientSecret);
-  var hasWclToken = !!cfg.wclToken;
-  var hasUserToken = !!cfg.wclUserToken;
-  var hasGistId = !!cfg.gistId;
-  var hasGistToken = !!cfg.gistToken;
-  var hasGuildId = !!(cfg.wclGuildId || cfg.wclId);
+  var hasWcl = !!(cfg.wclClientId && cfg.wclClientSecret);
+  var hasToken = !!cfg.wclToken;
+  var hasGist = !!(cfg.gistId && cfg.gistToken);
+  var hasGuild = !!(cfg.wclGuildId || cfg.wclId);
+  var allGood = hasWcl && hasToken && hasGist;
   
-  var dot = function(ok) { return '<span style="color:'+(ok?'var(--neon-green)':'var(--neon-red)')+';font-size:14px">'+(ok?'\u2705':'\u274c')+'</span>'; };
+  var dot = function(ok) { return ok ? '\u2705' : '\u274c'; };
   
   var h = '<div id="setupPanel" style="position:fixed;inset:0;background:rgba(5,5,20,0.95);z-index:300;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 0" onclick="if(event.target===this)this.remove()">';
-  h += '<div style="background:#111118;border:2px solid var(--neon-cyan);width:700px;max-width:95vw;margin:20px auto">';
+  h += '<div style="background:#111118;border:2px solid var(--neon-cyan);width:600px;max-width:95vw;margin:20px auto">';
   
   // Header
   h += '<div style="padding:14px 20px;border-bottom:2px solid #2a2a44;display:flex;justify-content:space-between;align-items:center">';
-  h += '<span style="font-family:Orbitron,sans-serif;font-size:16px;color:var(--neon-cyan);letter-spacing:2px">\u2699 SETUP & CREDENTIALS</span>';
-  h += '<button onclick="document.getElementById(\'setupPanel\').remove()" style="background:none;border:none;color:#ff2244;font-size:22px;cursor:pointer;font-weight:900">\u00d7</button>';
+  h += '<span style="font-family:Orbitron,sans-serif;font-size:16px;color:var(--neon-cyan);letter-spacing:2px">\u2699 SETUP</span>';
+  h += '<div style="display:flex;gap:10px;font-size:11px;font-family:Share Tech Mono,monospace">';
+  h += '<span>'+dot(hasWcl)+' WCL</span> <span>'+dot(hasToken)+' Token</span> <span>'+dot(hasGist)+' Cloud</span>';
+  h += '</div>';
+  h += '<button onclick="document.getElementById(\x27setupPanel\x27).remove()" style="background:none;border:none;color:#ff2244;font-size:22px;cursor:pointer;font-weight:900">\u00d7</button>';
   h += '</div>';
   
-  // Status bar
-  h += '<div style="display:flex;gap:16px;padding:10px 20px;background:#0a0a14;border-bottom:1px solid #2a2a44;flex-wrap:wrap">';
-  h += '<span style="font-size:11px;font-family:Share Tech Mono,monospace">'+dot(hasGuildId)+' Guild</span>';
-  h += '<span style="font-size:11px;font-family:Share Tech Mono,monospace">'+dot(hasWclCreds)+' WCL API</span>';
-  h += '<span style="font-size:11px;font-family:Share Tech Mono,monospace">'+dot(hasWclToken)+' WCL Token</span>';
-  h += '<span style="font-size:11px;font-family:Share Tech Mono,monospace">'+dot(hasUserToken)+' Premium</span>';
-  h += '<span style="font-size:11px;font-family:Share Tech Mono,monospace">'+dot(hasGistId && hasGistToken)+' Cloud Sync</span>';
+  h += '<div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px">';
+  
+  // ── STEP 1: WCL ──
+  h += '<div style="background:#0a0a14;border:1px solid '+(hasWcl?'var(--neon-green)':'var(--neon-orange)')+';padding:14px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+  h += '<div style="font-weight:900;color:'+(hasWcl?'var(--neon-green)':'var(--neon-orange)')+';font-size:13px;letter-spacing:1px">STEP 1 \u2014 WARCRAFTLOGS API</div>';
+  h += '<a href="https://www.warcraftlogs.com/api/clients" target="_blank" style="font-size:10px;color:var(--neon-cyan);text-decoration:none;border:1px solid var(--neon-cyan);padding:2px 8px">CREATE API CLIENT \u2197</a>';
   h += '</div>';
-  
-  h += '<div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">';
-  
-  // ── GUILD INFO ──
-  h += '<div style="background:#0a0a14;border:1px solid #2a2a44;padding:12px">';
-  h += '<div style="font-weight:900;color:var(--neon-cyan);font-size:12px;letter-spacing:1px;margin-bottom:8px">GUILD INFO</div>';
-  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
-  h += '<div><label style="font-size:9px;color:#666;letter-spacing:1px">GUILD NAME</label><input id="sp_guildName" type="text" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:6px 8px;outline:none" value="'+(cfg.guildName||'')+'"></div>';
-  h += '<div><label style="font-size:9px;color:#666;letter-spacing:1px">SERVER</label><input id="sp_server" type="text" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:6px 8px;outline:none" value="'+(cfg.server||'')+'"></div>';
-  h += '<div><label style="font-size:9px;color:#666;letter-spacing:1px">WCL GUILD ID</label><input id="sp_guildId" type="text" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:6px 8px;outline:none" value="'+(cfg.wclGuildId||cfg.wclId||'')+'"></div>';
-  h += '</div></div>';
-  
-  // ── WCL API ──
-  h += '<div style="background:#0a0a14;border:1px solid #2a2a44;padding:12px">';
-  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:900;color:var(--neon-orange);font-size:12px;letter-spacing:1px">WCL API CREDENTIALS</div>';
-  h += '<a href="https://www.warcraftlogs.com/api/clients" target="_blank" style="font-size:10px;color:var(--neon-cyan);text-decoration:none">Create API Client \u2197</a></div>';
+  h += '<div style="font-size:11px;color:#888;margin-bottom:8px">Create an API client on WCL (free), copy Client ID and Secret below. Everything else is automatic.</div>';
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
-  h += '<div><label style="font-size:9px;color:#666;letter-spacing:1px">CLIENT ID</label><input id="sp_wclClientId" type="text" style="width:100%;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--neon-orange);padding:6px 8px;outline:none" value="'+(cfg.wclClientId||'')+'"></div>';
-  h += '<div><label style="font-size:9px;color:#666;letter-spacing:1px">CLIENT SECRET</label><input id="sp_wclSecret" type="password" style="width:100%;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--neon-orange);padding:6px 8px;outline:none" value="'+(cfg.wclClientSecret||'')+'"></div>';
+  h += '<div><label style="font-size:9px;color:#666;letter-spacing:1px">CLIENT ID</label><input id="sp_wclClientId" type="text" style="width:100%;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--neon-orange);padding:6px 8px;outline:none;box-sizing:border-box" value="'+(cfg.wclClientId||'')+'"></div>';
+  h += '<div><label style="font-size:9px;color:#666;letter-spacing:1px">CLIENT SECRET</label><input id="sp_wclSecret" type="password" style="width:100%;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--neon-orange);padding:6px 8px;outline:none;box-sizing:border-box" value="'+(cfg.wclClientSecret||'')+'"></div>';
   h += '</div>';
-  h += '<div style="display:flex;gap:8px;align-items:center">';
-  h += '<label style="font-size:9px;color:#666;letter-spacing:1px;white-space:nowrap">API TOKEN</label>';
-  h += '<input id="sp_wclToken" type="text" readonly style="flex:1;font-size:11px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid '+(hasWclToken?'var(--neon-green)':'#2a2a44')+';color:'+(hasWclToken?'var(--neon-green)':'#555')+';padding:5px 8px;outline:none" value="'+(cfg.wclToken?cfg.wclToken.substring(0,20)+'...':'Not generated yet')+'">';
-  h += '<button class="btn primary" style="font-size:10px;padding:4px 12px;white-space:nowrap" onclick="spGenerateWclToken()">GENERATE</button>';
-  h += '</div></div>';
+  h += '<div><label style="font-size:9px;color:#666;letter-spacing:1px">WCL GUILD ID <span style="color:#444">(number from your guild\x27s WCL URL)</span></label><input id="sp_guildId" type="text" style="width:100%;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:6px 8px;outline:none;box-sizing:border-box" value="'+(cfg.wclGuildId||cfg.wclId||'')+'"></div>';
+  h += '<div id="sp_wclStatus" style="margin-top:6px;font-size:10px;color:#555">'+(hasToken?'\u2705 API token active':'Token will auto-generate when you save')+'</div>';
+  h += '</div>';
   
-  // ── WCL PREMIUM ──
-  h += '<div style="background:#0a0a14;border:1px solid #2a2a44;padding:12px">';
-  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:900;color:var(--neon-green);font-size:12px;letter-spacing:1px">WCL PREMIUM (OPTIONAL)</div>';
-  h += '<span style="font-size:10px;color:#555">Unlocks archived reports</span></div>';
+  // ── STEP 2: CLOUD SYNC ──
+  h += '<div style="background:#0a0a14;border:1px solid '+(hasGist?'var(--neon-green)':'var(--neon-purple)')+';padding:14px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+  h += '<div style="font-weight:900;color:'+(hasGist?'var(--neon-green)':'var(--neon-purple)')+';font-size:13px;letter-spacing:1px">STEP 2 \u2014 CLOUD SYNC</div>';
+  h += '<a href="https://github.com/settings/tokens/new?scopes=gist&description=TBC+Assignments" target="_blank" style="font-size:10px;color:var(--neon-cyan);text-decoration:none;border:1px solid var(--neon-cyan);padding:2px 8px">CREATE GITHUB TOKEN \u2197</a>';
+  h += '</div>';
+  h += '<div style="font-size:11px;color:#888;margin-bottom:8px">Create a GitHub token with \x27gist\x27 scope (free). Paste it below. A cloud save file (Gist) is auto-created for you.</div>';
+  h += '<div><label style="font-size:9px;color:#666;letter-spacing:1px">GITHUB TOKEN</label><input id="sp_gistToken" type="password" style="width:100%;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--neon-purple);padding:6px 8px;outline:none;box-sizing:border-box" value="'+(cfg.gistToken||'')+'"></div>';
+  if (cfg.gistId) {
+    h += '<div style="margin-top:4px"><label style="font-size:9px;color:#666;letter-spacing:1px">GIST ID <span style="color:#444">(auto-created)</span></label><input id="sp_gistId" type="text" readonly style="width:100%;font-size:11px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid var(--neon-green);color:var(--neon-green);padding:5px 8px;outline:none;box-sizing:border-box" value="'+(cfg.gistId||'')+'"></div>';
+  } else {
+    h += '<input id="sp_gistId" type="hidden" value="">';
+  }
+  h += '<div id="sp_gistStatus" style="margin-top:6px;font-size:10px;color:#555">'+(hasGist?'\u2705 Cloud sync active':'Gist auto-creates when you save')+'</div>';
+  h += '</div>';
+  
+  // ── WCL PREMIUM (collapsed) ──
+  h += '<details style="background:#0a0a14;border:1px solid #2a2a44;padding:0">';
+  h += '<summary style="padding:10px 14px;cursor:pointer;font-weight:900;color:#666;font-size:11px;letter-spacing:1px">OPTIONAL \u2014 WCL PREMIUM LOGIN '+(cfg.wclUserToken?'\u2705':'')+'</summary>';
+  h += '<div style="padding:10px 14px;border-top:1px solid #2a2a44">';
+  h += '<div style="font-size:11px;color:#888;margin-bottom:8px">Paid WCL subscribers can unlock archived reports. Click authorize, login, token auto-saves.</div>';
   h += '<div style="display:flex;gap:8px;align-items:center">';
-  h += '<input id="sp_userToken" type="text" style="flex:1;font-size:11px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid '+(hasUserToken?'var(--neon-green)':'#2a2a44')+';color:'+(hasUserToken?'var(--neon-green)':'#555')+';padding:5px 8px;outline:none" placeholder="User token appears after auth" value="'+(cfg.wclUserToken||'')+'">';
-  h += '<button class="btn" style="font-size:10px;padding:4px 12px;border-color:var(--neon-green);color:var(--neon-green);white-space:nowrap" onclick="wclPremiumPopupAuth()">AUTHORIZE</button>';
+  h += '<button class="btn" style="font-size:10px;padding:4px 12px;border-color:var(--neon-green);color:var(--neon-green)" onclick="wclPremiumPopupAuth()">AUTHORIZE</button>';
+  h += '<input id="sp_userToken" type="text" style="flex:1;font-size:11px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--neon-green);padding:5px 8px;outline:none" placeholder="Auto-fills after auth" value="'+(cfg.wclUserToken||'')+'">';
   h += '</div>';
   h += '<div id="wclAuthStatus" style="margin-top:4px;font-size:10px;color:#555"></div>';
-  h += '</div>';
-  
-  // ── CLOUD SYNC ──
-  h += '<div style="background:#0a0a14;border:1px solid #2a2a44;padding:12px">';
-  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:900;color:var(--neon-purple);font-size:12px;letter-spacing:1px">CLOUD SYNC (GIST)</div>';
-  h += '<a href="https://github.com/settings/tokens/new?scopes=gist&description=TBC+Assignments" target="_blank" style="font-size:10px;color:var(--neon-cyan);text-decoration:none">Create GitHub Token \u2197</a></div>';
-  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-  h += '<div><label style="font-size:9px;color:#666;letter-spacing:1px">GIST ID</label><input id="sp_gistId" type="text" style="width:100%;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--neon-purple);padding:6px 8px;outline:none" value="'+(cfg.gistId||'')+'"></div>';
-  h += '<div><label style="font-size:9px;color:#666;letter-spacing:1px">GITHUB TOKEN</label><input id="sp_gistToken" type="password" style="width:100%;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--neon-purple);padding:6px 8px;outline:none" value="'+(cfg.gistToken||'')+'"></div>';
-  h += '</div></div>';
+  h += '</div></details>';
   
   // ── ACTIONS ──
-  h += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
-  h += '<button class="btn primary" style="font-size:12px;padding:6px 20px" onclick="spSaveAll()">SAVE ALL</button>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px">';
+  h += '<button class="btn primary" style="font-size:13px;padding:8px 28px" onclick="spFinish()">\u2705 SAVE & FINISH</button>';
+  h += '<button class="btn" style="font-size:11px;padding:5px 14px" onclick="spTestConnection()">TEST</button>';
   h += '<button class="btn" style="font-size:11px;padding:5px 14px;border-color:var(--neon-green);color:var(--neon-green)" onclick="spCopyForOfficers()">COPY FOR OFFICERS</button>';
-  h += '<button class="btn" style="font-size:11px;padding:5px 14px" onclick="spTestConnection()">TEST CONNECTION</button>';
-  h += '<button class="btn" style="font-size:11px;padding:5px 14px" onclick="document.getElementById(\'setupPanel\').remove()">CLOSE</button>';
   h += '</div>';
+  h += '<div id="sp_actionStatus" style="font-size:11px;color:#555;min-height:16px"></div>';
   
   h += '</div></div></div>';
   document.body.insertAdjacentHTML('beforeend', h);
 }
 
-function spSaveAll() {
+function spFinish() {
+  var statusEl = document.getElementById('sp_actionStatus');
+  var steps = [];
   var cfg = getGuildConfig();
+  
+  // 1. Read all fields
   var el;
-  el = document.getElementById('sp_guildName'); if (el) cfg.guildName = el.value.trim();
-  el = document.getElementById('sp_server'); if (el) cfg.server = el.value.trim();
-  el = document.getElementById('sp_guildId'); if (el) { cfg.wclGuildId = el.value.trim(); cfg.wclId = el.value.trim(); }
-  el = document.getElementById('sp_wclClientId'); if (el) cfg.wclClientId = el.value.trim();
-  el = document.getElementById('sp_wclSecret'); if (el) cfg.wclClientSecret = el.value.trim();
+  el = document.getElementById('sp_wclClientId'); if (el && el.value.trim()) cfg.wclClientId = el.value.trim();
+  el = document.getElementById('sp_wclSecret'); if (el && el.value.trim()) cfg.wclClientSecret = el.value.trim();
+  el = document.getElementById('sp_guildId'); if (el && el.value.trim()) { cfg.wclGuildId = el.value.trim(); cfg.wclId = el.value.trim(); }
+  el = document.getElementById('sp_gistToken'); if (el && el.value.trim()) cfg.gistToken = el.value.trim();
+  el = document.getElementById('sp_gistId'); if (el && el.value.trim()) cfg.gistId = el.value.trim();
   el = document.getElementById('sp_userToken'); if (el && el.value.trim()) cfg.wclUserToken = el.value.trim();
-  el = document.getElementById('sp_gistId'); if (el) cfg.gistId = el.value.trim();
-  el = document.getElementById('sp_gistToken'); if (el) cfg.gistToken = el.value.trim();
   saveGuildConfig(cfg);
-  updateGuildDisplay();
-  toast('\u2705 All credentials saved!');
-  // Auto-generate WCL token if we have creds but no token
-  if (cfg.wclClientId && cfg.wclClientSecret && !cfg.wclToken) {
-    spGenerateWclToken();
+  
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--neon-cyan)">Saving...</span>';
+  
+  // 2. Auto-generate WCL token if we have creds
+  var chain = Promise.resolve();
+  
+  if (cfg.wclClientId && cfg.wclClientSecret) {
+    chain = chain.then(function() {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--neon-cyan)">Generating WCL token...</span>';
+      return fetch('https://www.warcraftlogs.com/oauth/token', {
+        method: 'POST',
+        headers: { 'Authorization': 'Basic ' + btoa(cfg.wclClientId + ':' + cfg.wclClientSecret), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'grant_type=client_credentials'
+      }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.access_token) {
+          cfg.wclToken = d.access_token;
+          saveGuildConfig(cfg);
+          steps.push('\u2705 WCL token generated');
+          var s = document.getElementById('sp_wclStatus');
+          if (s) s.innerHTML = '<span style="color:var(--neon-green)">\u2705 Token active</span>';
+        } else {
+          steps.push('\u274c WCL token failed: ' + (d.error_description || d.error || 'unknown'));
+        }
+      }).catch(function(e) { steps.push('\u274c WCL: ' + e.message); });
+    });
   }
-  // Refresh setup panel to update status dots
-  document.getElementById('setupPanel').remove();
-  openSetupPanel();
-}
-
-function spGenerateWclToken() {
-  // Save current field values first
-  var cfg = getGuildConfig();
-  var el1 = document.getElementById('sp_wclClientId');
-  var el2 = document.getElementById('sp_wclSecret');
-  if (el1 && el1.value) cfg.wclClientId = el1.value.trim();
-  if (el2 && el2.value) cfg.wclClientSecret = el2.value.trim();
-  if (!cfg.wclClientId || !cfg.wclClientSecret) { toast('Enter Client ID and Secret first'); return; }
-  saveGuildConfig(cfg);
-  toast('Generating token...');
-  fetch('https://www.warcraftlogs.com/oauth/token', {
-    method: 'POST',
-    headers: { 'Authorization': 'Basic ' + btoa(cfg.wclClientId + ':' + cfg.wclClientSecret), 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'grant_type=client_credentials'
-  }).then(function(r) { return r.json(); }).then(function(d) {
-    if (d.access_token) {
-      cfg.wclToken = d.access_token;
-      saveGuildConfig(cfg);
-      var el = document.getElementById('sp_wclToken');
-      if (el) { el.value = d.access_token.substring(0,20) + '...'; el.style.borderColor = 'var(--neon-green)'; el.style.color = 'var(--neon-green)'; }
-      toast('\u2705 WCL API token generated!');
-    } else { throw new Error(d.error_description || 'Failed'); }
-  }).catch(function(e) { toast('\u274c Token failed: ' + e.message); });
-}
-
-function spCopyForOfficers() {
-  var cfg = getGuildConfig();
-  var text = '=== ' + (cfg.guildName||'Guild') + ' TBC Assignment Sheet ===\n\n';
-  text += 'SITE: ' + window.location.origin + window.location.pathname + '\n\n';
-  text += 'OFFICER SETUP (paste into \u2699 SETUP):\n';
-  text += 'Gist ID: ' + (cfg.gistId||'NOT SET') + '\n';
-  text += 'Gist Token: ' + (cfg.gistToken||'NOT SET') + '\n\n';
-  text += 'RAIDER LINK (view only):\n';
-  text += window.location.origin + window.location.pathname + '?gist=' + (cfg.gistId||'') + (cfg.guildName ? '&guild='+encodeURIComponent(cfg.guildName) : '') + '\n';
-  navigator.clipboard.writeText(text).then(function() { toast('\u2705 Officer setup info copied to clipboard!'); });
+  
+  // 3. Auto-create Gist if we have a GitHub token but no Gist
+  if (cfg.gistToken && !cfg.gistId) {
+    chain = chain.then(function() {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--neon-cyan)">Creating cloud save (Gist)...</span>';
+      return fetch('https://api.github.com/gists', {
+        method: 'POST',
+        headers: { 'Authorization': 'token ' + cfg.gistToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: (cfg.guildName || 'TBC') + ' Assignments',
+          public: false,
+          files: { 'assignments.json': { content: JSON.stringify({guildName: cfg.guildName||'', assignments: assignments, roster: GUILD_ROSTER, wclClientId: cfg.wclClientId||'', wclClientSecret: cfg.wclClientSecret||'', wclGuildId: cfg.wclGuildId||cfg.wclId||'', savedAt: new Date().toISOString()}, null, 2) } }
+        })
+      }).then(function(r) { return r.json(); }).then(function(g) {
+        if (g.id) {
+          cfg.gistId = g.id;
+          saveGuildConfig(cfg);
+          steps.push('\u2705 Cloud save created: ' + g.id.substring(0,8) + '...');
+          var s = document.getElementById('sp_gistStatus');
+          if (s) s.innerHTML = '<span style="color:var(--neon-green)">\u2705 Gist created!</span>';
+          var gidEl = document.getElementById('sp_gistId');
+          if (gidEl) gidEl.value = g.id;
+        } else {
+          steps.push('\u274c Gist creation failed: ' + (g.message || 'unknown'));
+        }
+      }).catch(function(e) { steps.push('\u274c Gist: ' + e.message); });
+    });
+  }
+  
+  // 4. Auto-fetch guild info from WCL if we have token + guild ID
+  chain = chain.then(function() {
+    var guildId = cfg.wclGuildId || cfg.wclId;
+    if (cfg.wclToken && guildId) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--neon-cyan)">Fetching guild roster...</span>';
+      return fetchRosterFromWCL(guildId, function(err) {
+        if (!err) {
+          steps.push('\u2705 Roster loaded (' + GUILD_ROSTER.length + ' members)');
+          updateGuildDisplay();
+          renderBoss();
+        } else {
+          steps.push('\u26a0 Roster: ' + err);
+        }
+      });
+    }
+  });
+  
+  // 5. Finish
+  chain.then(function() {
+    setTimeout(function() {
+      if (steps.length) {
+        if (statusEl) statusEl.innerHTML = steps.join('<br>');
+        toast(steps.join(' | '));
+      } else {
+        toast('\u2705 Settings saved!');
+        document.getElementById('setupPanel').remove();
+      }
+      // Auto-close after 2s if all good
+      var allOk = steps.every(function(s) { return s.includes('\u2705'); });
+      if (allOk && steps.length) {
+        setTimeout(function() {
+          var panel = document.getElementById('setupPanel');
+          if (panel) panel.remove();
+        }, 2500);
+      }
+    }, 300);
+  });
 }
 
 function spTestConnection() {
   var cfg = getGuildConfig();
+  var statusEl = document.getElementById('sp_actionStatus');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--neon-cyan)">Testing...</span>';
   var results = [];
   var done = 0, total = 2;
-  var finish = function() { if (++done >= total) toast(results.join(' | ')); };
-  
-  // Test WCL
+  var finish = function() {
+    if (++done >= total) {
+      if (statusEl) statusEl.innerHTML = results.join('<br>');
+      toast(results.join(' | '));
+    }
+  };
   if (cfg.wclToken) {
-    wclQuery('{ rateLimitData { pointsSpentThisHour pointsResetIn limitPerHour } }')
+    wclQuery('{ rateLimitData { pointsSpentThisHour limitPerHour } }')
     .then(function(d) { results.push('\u2705 WCL: ' + d.rateLimitData.pointsSpentThisHour + '/' + d.rateLimitData.limitPerHour + ' pts used'); finish(); })
     .catch(function(e) { results.push('\u274c WCL: ' + e.message); finish(); });
-  } else { results.push('\u274c WCL: No token'); finish(); }
-  
-  // Test Gist
-  if (cfg.gistId) {
-    fetch('https://api.github.com/gists/' + cfg.gistId, cfg.gistToken ? {headers:{'Authorization':'token '+cfg.gistToken}} : {})
+  } else { results.push('\u274c WCL: No token — save first'); finish(); }
+  if (cfg.gistId && cfg.gistToken) {
+    fetch('https://api.github.com/gists/' + cfg.gistId, {headers:{'Authorization':'token '+cfg.gistToken}})
     .then(function(r) { results.push(r.ok ? '\u2705 Gist: Connected' : '\u274c Gist: HTTP '+r.status); finish(); })
     .catch(function(e) { results.push('\u274c Gist: '+e.message); finish(); });
-  } else { results.push('\u274c Gist: No ID'); finish(); }
+  } else { results.push('\u274c Gist: Not configured — save first'); finish(); }
 }
+
+function spCopyForOfficers() {
+  var cfg = getGuildConfig();
+  var url = window.location.origin + window.location.pathname;
+  var text = '=== ' + (cfg.guildName||'Guild') + ' TBC Assignment Sheet ===\n\n';
+  text += 'SITE: ' + url + '\n\n';
+  text += '--- OFFICER SETUP ---\n';
+  text += 'Open the site > click SETUP > paste these:\n';
+  text += 'Gist ID: ' + (cfg.gistId||'NOT SET') + '\n';
+  text += 'GitHub Token: ' + (cfg.gistToken||'NOT SET') + '\n\n';
+  text += '--- RAIDER LINK (view only) ---\n';
+  text += url + '?gist=' + (cfg.gistId||'') + (cfg.guildName ? '&guild='+encodeURIComponent(cfg.guildName) : '') + '\n';
+  navigator.clipboard.writeText(text).then(function() {
+    toast('\u2705 Officer setup info copied to clipboard!');
+    var s = document.getElementById('sp_actionStatus');
+    if (s) s.innerHTML = '<span style="color:var(--neon-green)">\u2705 Copied! DM this to your officers.</span>';
+  });
+}
+
 
 function openGuildSettings() {
   var cfg = getGuildConfig();
