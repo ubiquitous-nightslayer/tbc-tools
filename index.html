@@ -6333,32 +6333,32 @@ if (!window._rankCompCache) window._rankCompCache = {};
 function autoDetectRankCompare(bossName, playerName, playerDps, cmpContainerId, btnContainerId) {
   var btnContainer = document.getElementById(btnContainerId);
   if (!btnContainer) return;
-  
   var token = getWclToken();
   if (!token) { toast('Set up WCL credentials first'); return; }
-  
-  // Get player class
   var pR = GUILD_ROSTER.find(function(r){return r.name===playerName;});
   var cls = pR ? pR.cls : '';
   var spec = pR ? (pR.spec||'') : '';
   if (!cls) {
-    // Fall back to growth data
     Object.keys(assignments).forEach(function(key) {
       var a = assignments[key];
-      if (a.growth) a.growth.forEach(function(g) {
-        if (g.player === playerName && g.cls && !cls) cls = g.cls;
-      });
+      if (a.growth) a.growth.forEach(function(g) { if (g.player===playerName&&g.cls&&!cls) cls=g.cls; });
     });
   }
   if (!cls) { toast('Player class not found'); return; }
   
-  btnContainer.innerHTML = '<span style="font-size:11px;color:var(--neon-cyan)">Detecting rank for '+playerDps.toLocaleString()+' DPS...</span>';
+  // Get player's kill time from cached fight data
+  var myKillTime = 0;
+  if (window._lastFightCacheKey && window._fightDetailCache && window._fightDetailCache[window._lastFightCacheKey]) {
+    var myFD = window._fightDetailCache[window._lastFightCacheKey];
+    myKillTime = myFD.totalTime ? Math.round(myFD.totalTime/1000) : 0;
+  }
+  
+  btnContainer.innerHTML = '<span style="font-size:11px;color:var(--neon-cyan)">Detecting rank for '+playerDps.toLocaleString()+' DPS'+(myKillTime?' ('+Math.floor(myKillTime/60)+':'+('0'+(myKillTime%60)).slice(-2)+' kill)':'')+'...</span>';
   
   var bossClean = bossName.replace(/ \d+$/, '');
   var wclSpec = (spec||'').replace('Feral (Cat)','Feral').replace('Feral (Bear)','Guardian').replace('Beast Mastery','BeastMastery');
   var specFilter = wclSpec ? ', specName:"'+wclSpec+'"' : '';
   
-  // Step 1: Find encounter ID
   var zoneIds = [1007,1008,1009,1010,1011,1012,1013,1014,1015];
   var zoneQ = zoneIds.map(function(z){return 'z'+z+': zone(id:'+z+') { encounters { id name } }';}).join(' ');
   
@@ -6372,8 +6372,6 @@ function autoDetectRankCompare(bossName, playerName, playerDps, cmpContainerId, 
     });
     if (!encId) throw new Error('Encounter not found: '+bossClean);
     
-    // Step 2: Query ranking pages to find where player's DPS falls
-    // Start with pages 1, 5, 10, 20 to scan the range
     var scanPages = [1, 3, 5, 10, 15, 20];
     var scanQ = scanPages.map(function(p){return 'p'+p+': characterRankings(className:"'+cls+'"'+specFilter+', metric:dps, page:'+p+')';}).join(' ');
     
@@ -6381,72 +6379,96 @@ function autoDetectRankCompare(bossName, playerName, playerDps, cmpContainerId, 
       if (!rd||!rd.worldData||!rd.worldData.encounter) throw new Error('No rankings');
       var enc = rd.worldData.encounter;
       
-      // Build ranked DPS array with absolute positions
+      // Build ranked array with DPS + duration
       var allRanked = [];
       scanPages.forEach(function(pg) {
         var pd = enc['p'+pg];
         if (pd && pd.rankings) pd.rankings.forEach(function(r, i) {
-          allRanked.push({rank: (pg-1)*100+i+1, dps: Math.round(r.amount||0)});
+          allRanked.push({
+            rank: (pg-1)*100+i+1,
+            dps: Math.round(r.amount||0),
+            duration: r.duration ? Math.round(r.duration/1000) : 0
+          });
         });
       });
       
       if (!allRanked.length) throw new Error('No rankings found for '+cls);
-      
-      // Find player's approximate rank — where does their DPS fit?
       allRanked.sort(function(a,b){return b.dps-a.dps;});
-      var playerRank = allRanked[allRanked.length-1].rank; // default: worst we found
+      
+      // Find player's approximate rank
+      var playerRank = allRanked[allRanked.length-1].rank;
       for (var i=0; i<allRanked.length; i++) {
-        if (playerDps >= allRanked[i].dps) {
-          playerRank = allRanked[i].rank;
-          break;
+        if (playerDps >= allRanked[i].dps) { playerRank = allRanked[i].rank; break; }
+      }
+      var startRank = Math.min(playerRank, 2000);
+      
+      // ── ROW 1: SIMILAR KILL TIME (within 25s) ──
+      var similarKT = [];
+      if (myKillTime > 0) {
+        var ktFiltered = allRanked.filter(function(r) {
+          return r.duration > 0 && Math.abs(r.duration - myKillTime) <= 25;
+        });
+        ktFiltered.sort(function(a,b){return b.dps-a.dps;});
+        if (ktFiltered.length > 5) {
+          // Pick 5 evenly spaced
+          var step = Math.floor(ktFiltered.length / 5);
+          for (var j=0; j<5; j++) similarKT.push(ktFiltered[j*step]);
+        } else {
+          similarKT = ktFiltered.slice(0,5);
         }
       }
       
-      // Cap at 2000
-      var startRank = Math.min(playerRank, 2000);
-      
-      // Generate 5 evenly spaced positions from startRank toward #1
+      // ── ROW 2: RANK TARGETS (evenly spaced toward #1) ──
       var positions = [];
       if (startRank <= 5) {
-        // Already near the top — just show 1 through startRank
-        for (var r=1; r<=Math.min(startRank, 5); r++) positions.push(r);
+        for (var r=1; r<=Math.min(startRank,5); r++) positions.push(r);
       } else {
-        var step = Math.floor((startRank - 1) / 5);
-        for (var p=0; p<5; p++) {
-          var pos = startRank - (step * (p+1));
-          if (pos < 1) pos = 1;
-          positions.push(pos);
-        }
+        var stp = Math.floor((startRank-1)/5);
+        for (var p=0; p<5; p++) { var pos=startRank-(stp*(p+1)); if(pos<1)pos=1; positions.push(pos); }
         positions.sort(function(a,b){return a-b;});
-        // Make sure #1 is included
-        if (positions[0] !== 1) positions.unshift(1);
-        // Deduplicate
+        if (positions[0]!==1) positions.unshift(1);
         positions = positions.filter(function(v,i,a){return a.indexOf(v)===i;});
       }
       
-      // Also store rank limit DPS values from the scan
+      // Rank limit DPS data
       var rlData = {};
       positions.forEach(function(pos) {
-        var closest = null, closestDist = Infinity;
-        allRanked.forEach(function(r) {
-          var dist = Math.abs(r.rank - pos);
-          if (dist < closestDist) { closestDist = dist; closest = r; }
-        });
+        var closest=null, closestDist=Infinity;
+        allRanked.forEach(function(r) { var d=Math.abs(r.rank-pos); if(d<closestDist){closestDist=d;closest=r;} });
         if (closest) rlData[pos] = closest.dps;
       });
       setRankLimitData(cls, spec, bossName, rlData);
       
-      // Show the buttons
-      var h = '<div style="font-size:10px;color:#888;font-family:Share Tech Mono,monospace;margin-bottom:3px">YOUR RANK: ~#'+playerRank.toLocaleString()+' \\u2014 COMPARE TO:</div>';
+      window.rankPositions = positions;
+      var fmtT = function(s){return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2);};
+      
+      var h = '<div style="font-size:10px;color:var(--neon-cyan);font-family:Share Tech Mono,monospace;margin-bottom:6px;font-weight:900">YOUR RANK: ~#'+playerRank.toLocaleString()+' | KILL TIME: '+(myKillTime?fmtT(myKillTime):'?')+'</div>';
+      
+      // Row 1: Similar Kill Time
+      if (similarKT.length) {
+        h += '<div style="font-size:9px;color:var(--neon-green);font-family:Share Tech Mono,monospace;margin-bottom:2px;letter-spacing:1px">\u23f1 REALISTIC \u2014 SIMILAR KILL TIME (\u00b125s)</div>';
+        h += '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:8px">';
+        similarKT.forEach(function(r, idx) {
+          h += '<button class="btn" style="font-size:10px;padding:2px 8px;border-color:var(--neon-green);color:var(--neon-green)" onclick="loadRankComparison(\''+bossName.replace(/'/g,'')+'\',\''+playerName.replace(/'/g,'')+'\','+r.rank+',\''+cmpContainerId+'\')" title="'+r.dps.toLocaleString()+' DPS | Kill: '+fmtT(r.duration)+'">#'+r.rank+' <span style="color:#666;font-size:8px">'+fmtT(r.duration)+'</span></button>';
+        });
+        h += '</div>';
+      } else if (myKillTime) {
+        h += '<div style="font-size:9px;color:#555;margin-bottom:8px">No ranks found within \u00b125s of your kill time</div>';
+      }
+      
+      // Row 2: Rank Targets
+      h += '<div style="font-size:9px;color:var(--neon-orange);font-family:Share Tech Mono,monospace;margin-bottom:2px;letter-spacing:1px">\ud83c\udfc6 RANK TARGETS \u2014 CLIMB TO #1</div>';
       h += '<div style="display:flex;gap:3px;flex-wrap:wrap">';
       positions.forEach(function(pos, idx) {
         var dpsAtPos = rlData[pos] || 0;
-        h += '<button class="btn" style="font-size:10px;padding:2px 8px;border-color:'+rankColor(idx)+';color:'+rankColor(idx)+'" onclick="loadRankComparison(\''+bossName.replace(/'/g,'')+'\',\''+playerName.replace(/'/g,'')+'\','+pos+',\''+cmpContainerId+'\')" title="~'+dpsAtPos.toLocaleString()+' DPS">#'+pos+'</button>';
+        var closest = null; allRanked.forEach(function(r){if(!closest||Math.abs(r.rank-pos)<Math.abs(closest.rank-pos))closest=r;});
+        var dur = closest && closest.duration ? fmtT(closest.duration) : '?';
+        h += '<button class="btn" style="font-size:10px;padding:2px 8px;border-color:'+rankColor(idx)+';color:'+rankColor(idx)+'" onclick="loadRankComparison(\''+bossName.replace(/'/g,'')+'\',\''+playerName.replace(/'/g,'')+'\','+pos+',\''+cmpContainerId+'\')" title="~'+dpsAtPos.toLocaleString()+' DPS | Kill: '+dur+'">#'+pos+' <span style="color:#666;font-size:8px">'+dur+'</span></button>';
       });
       h += '</div>';
       btnContainer.innerHTML = h;
       
-      toast('\\u2705 Your rank: ~#'+playerRank.toLocaleString()+' | '+positions.length+' comparison targets generated');
+      toast('\u2705 Rank ~#'+playerRank.toLocaleString()+' | '+similarKT.length+' realistic + '+positions.length+' rank targets');
     });
   }).catch(function(err) {
     btnContainer.innerHTML = '<span style="color:#aa3344;font-size:11px">Failed: '+err.message+'</span>';
