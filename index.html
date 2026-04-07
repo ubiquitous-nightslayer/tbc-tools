@@ -3783,7 +3783,8 @@ function importAllWCL() {
       function importNext() {
         if (idx >= reports.length) {
           renderBoss();
-          toast('✅ Finished importing ' + reports.length + ' reports!');
+          quickSave();
+          toast('✅ Finished importing ' + reports.length + ' reports! (Auto-saved)');
           return;
         }
         var r = reports[idx];
@@ -3944,6 +3945,7 @@ function importWCLReportSilent(reportCode, callback) {
                 });
               });
             });
+            quickSave();
             if (callback) callback();
           })
           .catch(function() { if (callback) callback(); });
@@ -4111,6 +4113,7 @@ function importWCLReport(reportCode) {
           });
           renderBoss();
           toast('\u2620 Death data imported for ' + bossFights.length + ' fights');
+          quickSave();
         }).catch(function(e) { console.log('Deaths import error:', e); });
       }
 
@@ -4196,7 +4199,9 @@ function importWCLReport(reportCode) {
             });
             
             renderBoss();
+            quickSave();
             toast('✅ DPS data imported for ' + killFights.length + ' kills');
+            quickSave();
           })
           .catch(function(e) { console.log('DPS import error:', e); });
       }
@@ -4204,6 +4209,7 @@ function importWCLReport(reportCode) {
       renderBoss();
       var fightCount = report.fights.filter(function(f){return f.encounterID;}).length;
       toast('✅ Imported ' + fightCount + ' fights from ' + report.title);
+      quickSave();
     })
     .catch(function(e) {
       if (e.message && e.message.includes('401')) {
@@ -5362,7 +5368,7 @@ function renderHealingTab(pd) {
   h += '<thead><tr style="color:#555;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px">#</th><th style="text-align:left;padding:6px">PLAYER</th><th style="text-align:left;padding:6px">CLASS</th><th style="text-align:right;padding:6px">AVG HPS</th><th style="text-align:right;padding:6px">TOTAL HEALING</th><th style="text-align:right;padding:6px">FIGHTS</th></tr></thead><tbody>';
   var maxHPS = healers[0] ? healers[0].avgHPS : 1;
   healers.forEach(function(p, i) {
-    var cc = CLASS_COLORI_MAP[p.cls] || '#888';
+    var cc = CLASS_COLORS_MAP[p.cls] || '#888';
     var barW = Math.round(p.avgHPS / maxHPS * 100);
     h += '<tr style="border-bottom:1px solid #1a1a34">';
     h += '<td style="padding:5px 6px;color:#555;font-weight:900">' + (i+1) + '</td>';
@@ -5427,7 +5433,7 @@ function renderSurvivabilityTab(pd) {
   h += '<table style="width:100%;border-collapse:collapse;font-size:13px;font-family:Share Tech Mono,monospace">';
   h += '<thead><tr style="color:#555;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px">#</th><th style="text-align:left;padding:6px">PLAYER</th><th style="text-align:left;padding:6px">CLASS</th><th style="text-align:right;padding:6px">SURV SCORE</th><th style="text-align:right;padding:6px">DEATHS/FIGHT</th><th style="text-align:right;padding:6px">AVG DTPS</th><th style="text-align:right;padding:6px">FIGHTS</th></tr></thead><tbody>';
   players.forEach(function(p, i) {
-    var cc = CLASS_COLORI_MAP[p.cls] || '#888';
+    var cc = CLASS_COLORS_MAP[p.cls] || '#888';
     var scoreColor = p.survScore >= 80 ? 'var(--neon-green)' : p.survScore >= 50 ? 'var(--neon-orange)' : 'var(--neon-red)';
     h += '<tr style="border-bottom:1px solid #1a1a34">';
     h += '<td style="padding:5px 6px;color:#555;font-weight:900">' + (i+1) + '</td>';
@@ -5447,7 +5453,7 @@ function renderSurvivabilityTab(pd) {
     h += '<div class="data-card"><div class="data-card-header">☠ DEATH COUNT — TOTAL ACROSS ALL RAIDS</div>';
     h += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
     deathSorted.slice(0,15).forEach(function(p) {
-      var cc = CLASS_COLORI_MAP[p.cls] || '#888';
+      var cc = CLASS_COLORS_MAP[p.cls] || '#888';
       h += '<div style="background:#1a1a34;border:1px solid #2a2a44;padding:8px 14px;text-align:center;min-width:100px">';
       h += '<div style="font-weight:900;color:'+cc+';font-size:13px">'+p.name+'</div>';
       h += '<div style="font-size:24px;font-weight:900;color:var(--neon-red);font-family:Orbitron,sans-serif">'+p.totalDeaths+'</div>';
@@ -5536,7 +5542,7 @@ function renderTankTab(pd) {
   h += '<div class="data-card"><div class="data-card-header">🛡 TANK COMPARISON</div>';
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">';
   tanks.forEach(function(t) {
-    var cc = CLASS_COLORI_MAP[t.cls] || '#888';
+    var cc = CLASS_COLORS_MAP[t.cls] || '#888';
     h += '<div style="background:#1a1a34;border:1px solid #2a2a44;padding:16px">';
     h += '<div style="font-family:Orbitron,sans-serif;font-size:16px;font-weight:900;color:'+cc+';margin-bottom:10px">'+t.name+'<span style="font-size:10px;color:#555;margin-left:8px">'+t.cls+'</span>'+(t.isConfirmed?' <span style="font-size:8px;padding:2px 6px;background:rgba(0,240,255,0.1);border:1px solid var(--neon-cyan);color:var(--neon-cyan);letter-spacing:1px">ASSIGNED TANK</span>':' <span style="font-size:8px;padding:2px 6px;background:rgba(255,102,0,0.1);border:1px solid var(--neon-orange);color:var(--neon-orange);letter-spacing:1px">AUTO-DETECTED</span>')+'</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
@@ -5635,7 +5641,7 @@ function renderReportCard(pd) {
   h += '<table style="width:100%;border-collapse:collapse;font-size:12px;font-family:Share Tech Mono,monospace">';
   h += '<thead><tr style="color:#555;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px">GRADE</th><th style="text-align:left;padding:6px">PLAYER</th><th style="text-align:left;padding:6px">CLASS</th><th style="text-align:right;padding:6px">SCORE</th><th style="text-align:right;padding:6px">ATTEND</th><th style="text-align:right;padding:6px">AVG DPS</th><th style="text-align:right;padding:6px">CONSIST</th><th style="text-align:right;padding:6px">DEATHS/F</th><th style="text-align:right;padding:6px">IMPROVE</th><th style="text-align:right;padding:6px">FIGHTS</th></tr></thead><tbody>';
   players.forEach(function(p) {
-    var cc = CLASS_COLORI_MAP[p.cls] || '#888';
+    var cc = CLASS_COLORS_MAP[p.cls] || '#888';
     var impColor = p.improvement > 0 ? 'var(--neon-green)' : p.improvement < -5 ? 'var(--neon-red)' : 'var(--text-sub)';
     h += '<tr style="border-bottom:1px solid #1a1a34">';
     h += '<td style="padding:5px 6px;font-size:18px;font-weight:900;color:'+p.gradeColor+';font-family:Orbitron,sans-serif;text-align:center">'+p.grade+'</td>';
@@ -5736,7 +5742,7 @@ function renderMultiLineTrend(playerNames, metric) {
     var lx = pad + pi * 110;
     h += '<rect x="'+lx+'" y="4" width="8" height="8" fill="'+colors[pi%colors.length]+'" opacity="0.8"/>';
     var r2 = GUILD_ROSTER.find(function(r){return r.name===name;});
-    var cc = r2 ? (CLASS_COLORI_MAP[r2.cls]||'#888') : '#888';
+    var cc = r2 ? (CLASS_COLORS_MAP[r2.cls]||'#888') : '#888';
     h += '<text x="'+(lx+12)+'" y="12" fill="'+cc+'" font-size="9" font-family="Share Tech Mono,monospace" font-weight="900">'+name+'</text>';
   });
   h += '</svg>';
