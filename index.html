@@ -595,6 +595,7 @@ body.viewer-mode .viewer-badge { display:inline-flex !important; }
 // TOOLBAR DROPDOWN TOGGLE
 // ═══════════════════════════════════════════
 function toggleToolbarDrop(btn) {
+  event.stopPropagation();
   var group = btn.parentElement;
   var wasOpen = group.classList.contains('open');
   // Close all dropdowns first
@@ -602,13 +603,18 @@ function toggleToolbarDrop(btn) {
   // Toggle this one
   if (!wasOpen) group.classList.add('open');
 }
-// Close dropdowns when clicking outside or clicking a dropdown item
+// Close dropdowns when clicking outside
 document.addEventListener('click', function(e) {
   if (!e.target.closest('.toolbar-group')) {
     document.querySelectorAll('.toolbar-group.open').forEach(function(g) { g.classList.remove('open'); });
   }
+});
+// Close dropdown after clicking an item (with slight delay so the action fires first)
+document.addEventListener('click', function(e) {
   if (e.target.closest('.toolbar-drop-item')) {
-    document.querySelectorAll('.toolbar-group.open').forEach(function(g) { g.classList.remove('open'); });
+    setTimeout(function() {
+      document.querySelectorAll('.toolbar-group.open').forEach(function(g) { g.classList.remove('open'); });
+    }, 100);
   }
 });
 
@@ -4102,21 +4108,13 @@ function openWclUserTokenModal() {
   h += '<button class="btn" style="font-size:10px;padding:3px 8px;border-color:var(--neon-green);color:var(--neon-green)" onclick="navigator.clipboard.writeText(window.location.origin+window.location.pathname);this.textContent=\x27\u2705\x27;setTimeout(()=>this.textContent=\x27COPY\x27,1000)">COPY</button>';
   h += '<button class="btn" style="font-size:10px;padding:3px 8px;border-color:var(--neon-cyan);color:var(--neon-cyan)" onclick="window.open(\x27https://www.warcraftlogs.com/api/clients\x27)">OPEN WCL</button>';
   h += '</div></div>';
-  // Step 2
-  var authUrl = 'https://www.warcraftlogs.com/oauth/authorize?client_id=' + clientId + '&redirect_uri=' + encodeURIComponent(window.location.origin + window.location.pathname) + '&response_type=code';
+  // Step 2: Authorize via popup (auto-captures the code)
   h += '<div style="background:#0a0a14;border:1px solid #2a2a44;padding:10px;margin-bottom:8px">';
-  h += '<div style="font-weight:900;color:var(--neon-cyan);font-size:13px;margin-bottom:4px">STEP 2 \u2014 Authorize Your Account</div>';
-  h += '<div style="font-size:11px;color:#aaa;margin-bottom:6px">Click OPEN, login & authorize. You\'ll redirect to localhost \u2014 copy the <span style="color:var(--neon-orange);font-weight:900">code=XXXXX</span> from the URL bar.</div>';
-  h += '<div style="display:flex;gap:4px;align-items:center">';
-  h += '<button class="btn primary" style="font-size:12px;padding:5px 16px" onclick="window.open(\x27' + authUrl + '\x27)">OPEN WCL AUTH</button>';
-  h += '</div></div>';
-  // Step 3
-  h += '<div style="background:#0a0a14;border:1px solid #2a2a44;padding:10px;margin-bottom:8px">';
-  h += '<div style="font-weight:900;color:var(--neon-cyan);font-size:13px;margin-bottom:4px">STEP 3 \u2014 Paste Code & Get Token</div>';
-  h += '<div style="display:flex;gap:4px;align-items:center;margin-bottom:6px">';
-  h += '<input id="wclQuickCode" type="text" style="flex:1;font-size:14px;font-family:Share Tech Mono,monospace;background:#14141e;border:2px solid var(--neon-orange);color:var(--neon-orange);padding:8px 10px;outline:none" placeholder="Paste code here">';
-  h += '<button class="btn primary" style="font-size:12px;padding:6px 16px" onclick="wclExchangeQuickCode()">GET TOKEN</button>';
-  h += '</div></div>';
+  h += '<div style="font-weight:900;color:var(--neon-cyan);font-size:13px;margin-bottom:4px">STEP 2 \u2014 Authorize & Get Token</div>';
+  h += '<div style="font-size:11px;color:#aaa;margin-bottom:6px">Click below \u2014 a popup opens for WCL login. After authorizing, the token is captured automatically.</div>';
+  h += '<button class="btn primary" style="font-size:12px;padding:6px 20px" onclick="wclPremiumPopupAuth()">AUTHORIZE & GET TOKEN</button>';
+  h += '<div id="wclAuthStatus" style="margin-top:6px;font-size:11px;color:#555"></div>';
+  h += '</div>';
   // Token field
   h += '<div style="font-weight:900;color:var(--neon-green);font-size:12px;margin-bottom:4px;margin-top:12px">USER ACCESS TOKEN</div>';
   h += '<input id="wclQuickUserToken" type="text" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:2px solid var(--neon-green);color:var(--neon-green);padding:8px 10px;outline:none;box-sizing:border-box" placeholder="Token appears here after Step 3" value="' + existing + '">';
@@ -4127,6 +4125,73 @@ function openWclUserTokenModal() {
   h += '</div>';
   h += '</div></div>';
   document.body.insertAdjacentHTML('beforeend', h);
+}
+
+function wclPremiumPopupAuth() {
+  var cfg = getGuildConfig();
+  if (!cfg.wclClientId) { toast('Set up WCL Client ID first in \u2699 Settings'); return; }
+  var redirectUri = window.location.origin + window.location.pathname;
+  var authUrl = 'https://www.warcraftlogs.com/oauth/authorize?client_id=' + encodeURIComponent(cfg.wclClientId) + '&redirect_uri=' + encodeURIComponent(redirectUri) + '&response_type=code';
+  var statusEl = document.getElementById('wclAuthStatus');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--neon-orange)">Waiting for authorization...</span>';
+  
+  var popup = window.open(authUrl, 'wclPremiumAuth', 'width=600,height=700,scrollbars=yes');
+  if (!popup) {
+    // Popup blocked — fall back to manual flow
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--neon-red)">Popup blocked! </span><a href="' + authUrl + '" target="_blank" style="color:var(--neon-cyan)">Click here to open manually</a>, then paste the <span style="color:var(--neon-orange)">code=XXXX</span> from the URL below:<br><input id="wclManualCode" type="text" style="margin-top:4px;width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:2px solid var(--neon-orange);color:var(--neon-orange);padding:6px 10px" placeholder="Paste code here"><button class="btn primary" style="font-size:11px;padding:4px 12px;margin-top:4px" onclick="wclExchangeManualCode()">GET TOKEN</button>';
+    return;
+  }
+  
+  var pollTimer = setInterval(function() {
+    try {
+      if (popup.closed) { clearInterval(pollTimer); if (statusEl) statusEl.innerHTML = '<span style="color:#555">Popup closed</span>'; return; }
+      var u = popup.location.href;
+      if (u && u.includes('code=')) {
+        clearInterval(pollTimer);
+        var code = new URL(u).searchParams.get('code');
+        popup.close();
+        if (code) {
+          if (statusEl) statusEl.innerHTML = '<span style="color:var(--neon-green)">Code captured! Exchanging for token...</span>';
+          wclExchangeCodeForPremium(code, redirectUri);
+        }
+      }
+    } catch(e) { /* cross-origin — keep polling */ }
+  }, 500);
+}
+
+function wclExchangeManualCode() {
+  var code = document.getElementById('wclManualCode').value.trim();
+  if (!code) { toast('Paste the code first'); return; }
+  wclExchangeCodeForPremium(code, window.location.origin + window.location.pathname);
+}
+
+function wclExchangeCodeForPremium(code, redirectUri) {
+  var cfg = getGuildConfig();
+  var clientId = cfg.wclClientId || '';
+  var clientSecret = cfg.wclClientSecret || '';
+  if (!clientSecret) { toast('Client secret not set \u2014 configure in \u2699 Settings first'); return; }
+  var statusEl = document.getElementById('wclAuthStatus');
+  
+  fetch('https://www.warcraftlogs.com/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': 'Basic ' + btoa(clientId + ':' + clientSecret) },
+    body: 'grant_type=authorization_code&code=' + encodeURIComponent(code) + '&redirect_uri=' + encodeURIComponent(redirectUri)
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.access_token) {
+      var tokenEl = document.getElementById('wclQuickUserToken');
+      if (tokenEl) tokenEl.value = data.access_token;
+      cfg.wclUserToken = data.access_token;
+      saveGuildConfig(cfg);
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--neon-green)">\u2705 Token obtained and saved! Archived reports unlocked.</span>';
+      toast('\u2705 WCL Premium token saved!');
+    } else {
+      throw new Error(data.error_description || data.error || 'Failed');
+    }
+  }).catch(function(e) {
+    // CORS blocked — show curl command
+    var cmd = 'curl -u "' + clientId + ':' + clientSecret + '" -X POST https://www.warcraftlogs.com/oauth/token -d "grant_type=authorization_code&code=' + code + '&redirect_uri=' + encodeURIComponent(redirectUri) + '"';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--neon-red)">Browser blocked (CORS). Run this in terminal:</span><br><textarea style="width:100%;height:60px;font-size:10px;font-family:Share Tech Mono,monospace;background:#0c0c1a;border:1px solid var(--neon-orange);color:var(--neon-orange);padding:6px;margin-top:4px;resize:vertical" onclick="this.select()">' + cmd + '</textarea><div style="font-size:10px;color:#888;margin-top:4px">Copy the access_token from the response and paste it in the token field above, then click SAVE.</div>';
+  });
 }
 
 function wclExchangeQuickCode() {
