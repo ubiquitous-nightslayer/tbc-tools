@@ -2517,6 +2517,7 @@ function loadShareLink() {
           } else {
             toast('✅ Assignments loaded!');
           }
+          quickSave();
         }
       })
       .catch(function(e) { toast('❌ ' + e.message); });
@@ -3455,6 +3456,7 @@ function cloudLoad() {
         var time = data.savedAt ? new Date(data.savedAt).toLocaleString() : 'unknown';
         var who = data.savedBy || 'unknown';
         toast('☁️ Loaded! Saved by ' + who + ' at ' + time);
+        quickSave();
       } else {
         toast('No assignment data found in Gist');
       }
@@ -4209,6 +4211,7 @@ function importWCLReport(reportCode) {
       renderBoss();
       var fightCount = report.fights.filter(function(f){return f.encounterID;}).length;
       toast('✅ Imported ' + fightCount + ' fights from ' + report.title);
+      quickSave();
       quickSave();
     })
     .catch(function(e) {
@@ -6661,211 +6664,149 @@ function renderComparisonHTML(data, rankPos) {
   var totalDmg = 0; data.dmgDone.forEach(function(e){totalDmg+=e.total||0;});
   var col = rankColor((window.rankPositions||[]).indexOf(rankPos));
   
-  // Get player's own fight data for side-by-side
-  var myData = null;
-  if (window._lastFightCacheKey && window._fightDetailCache) {
-    myData = window._fightDetailCache[window._lastFightCacheKey];
-  }
-  var myTotalDmg = 0;
-  var myFightSec = 1;
-  if (myData) {
-    myData.dmgDone.forEach(function(e){myTotalDmg+=e.total||0;});
-    myFightSec = myData.totalTime ? myData.totalTime/1000 : 1;
-  }
-  var myDps = myData ? Math.round(myTotalDmg/myFightSec) : 0;
+  var my = null;
+  if (window._lastFightCacheKey && window._fightDetailCache) my = window._fightDetailCache[window._lastFightCacheKey];
+  var myTotalDmg = 0, myFightSec = 1, myFightMin = 0;
+  if (my) { my.dmgDone.forEach(function(e){myTotalDmg+=e.total||0;}); myFightSec = my.totalTime ? my.totalTime/1000 : 1; myFightMin = myFightSec/60; }
+  var myDps = my ? Math.round(myTotalDmg/myFightSec) : 0;
   var theirDps = Math.round(totalDmg/fightSec);
+  
+  var LUST = ['Bloodlust','Heroism','Drums of Battle'];
+  function findLust(buffs,tt){var f=[];(buffs||[]).forEach(function(b){LUST.forEach(function(ln){if(b.name&&b.name.indexOf(ln)!==-1){f.push({name:b.name,up:tt>0?Math.round((b.totalUptime||0)/tt*100):0});}});});return f;}
+  var theirLust = findLust(data.buffs, data.totalTime);
+  var myLust = my ? findLust(my.buffs, my.totalTime) : [];
+  function fmtTime(s){return Math.floor(s/60)+':'+('0'+Math.round(s%60)).slice(-2);}
   
   h+='<div style="background:#0d0d18;border:1px solid '+col+';padding:12px;margin-top:8px">';
   
-  // Header: side-by-side names
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
-  h+='<div style="text-align:center;padding:8px;background:#14141e;border:1px solid '+col+'">';
-  h+='<div style="font-family:Orbitron,sans-serif;font-size:11px;color:'+col+';letter-spacing:1px">RANK #'+rankPos+(data.requestedRank && data.requestedRank !== rankPos ? ' (#'+data.requestedRank+' requested)' : '')+' \u2014 '+data.playerName+'</div>';
-  h+='<div style="font-size:22px;font-weight:900;color:'+col+';font-family:Orbitron,sans-serif">'+theirDps.toLocaleString()+' <span style="font-size:11px;color:#666">DPS</span></div>';
-  if (data.server) h+='<div style="font-size:10px;color:#555">'+data.server+'</div>';
+  // ═══ HEADER ═══
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px">';
+  h+='<div style="text-align:center;padding:10px;background:#14141e;border:1px solid '+col+'">';
+  h+='<div style="font-family:Orbitron,sans-serif;font-size:11px;color:'+col+';letter-spacing:1px;margin-bottom:4px">RANK #'+rankPos+' \u2014 '+(data.playerName||'?')+'</div>';
+  h+='<div style="font-size:24px;font-weight:900;color:'+col+';font-family:Orbitron,sans-serif">'+theirDps.toLocaleString()+' <span style="font-size:11px;color:#666">DPS</span></div>';
+  h+='<div style="display:flex;justify-content:center;gap:12px;margin-top:6px;font-size:10px;font-family:Share Tech Mono,monospace">';
+  h+='<span style="color:#888">\u23f1 '+fmtTime(fightSec)+'</span>';
+  h+='<span style="color:#888">DMG '+fmtK(totalDmg)+'</span>';
+  if(data.server)h+='<span style="color:#555">'+data.server+'</span>';
   h+='</div>';
-  h+='<div style="text-align:center;padding:8px;background:#14141e;border:1px solid var(--neon-cyan)">';
-  h+='<div style="font-family:Orbitron,sans-serif;font-size:11px;color:var(--neon-cyan);letter-spacing:1px">YOUR FIGHT</div>';
-  h+='<div style="font-size:22px;font-weight:900;color:var(--neon-cyan);font-family:Orbitron,sans-serif">'+myDps.toLocaleString()+' <span style="font-size:11px;color:#666">DPS</span></div>';
+  if(theirLust.length)h+='<div style="margin-top:4px;font-size:10px;color:var(--neon-orange);font-weight:900">\u26a1 '+theirLust.map(function(l){return l.name+' '+l.up+'%';}).join(', ')+'</div>';
+  if(fightSec<90)h+='<div style="margin-top:2px;font-size:9px;color:var(--neon-yellow);font-weight:900">\ud83d\udea8 SPEED KILL</div>';
   h+='</div>';
+  h+='<div style="text-align:center;padding:10px;background:#14141e;border:1px solid var(--neon-cyan)">';
+  h+='<div style="font-family:Orbitron,sans-serif;font-size:11px;color:var(--neon-cyan);letter-spacing:1px;margin-bottom:4px">YOUR FIGHT</div>';
+  h+='<div style="font-size:24px;font-weight:900;color:var(--neon-cyan);font-family:Orbitron,sans-serif">'+myDps.toLocaleString()+' <span style="font-size:11px;color:#666">DPS</span></div>';
+  h+='<div style="display:flex;justify-content:center;gap:12px;margin-top:6px;font-size:10px;font-family:Share Tech Mono,monospace">';
+  h+='<span style="color:#888">\u23f1 '+fmtTime(myFightSec)+'</span>';
+  h+='<span style="color:#888">DMG '+fmtK(myTotalDmg)+'</span>';
+  h+='</div>';
+  if(myLust.length)h+='<div style="margin-top:4px;font-size:10px;color:var(--neon-orange);font-weight:900">\u26a1 '+myLust.map(function(l){return l.name+' '+l.up+'%';}).join(', ')+'</div>';
+  if(myFightSec<90)h+='<div style="margin-top:2px;font-size:9px;color:var(--neon-yellow);font-weight:900">\ud83d\udea8 SPEED KILL</div>';
+  h+='</div></div>';
+  
+  // ═══ DIFF BAR ═══
+  var dpsDiff=theirDps-myDps,dpsDiffPct=myDps>0?Math.round(dpsDiff/myDps*100):0,timeDiff=Math.round(fightSec-myFightSec);
+  h+='<div style="text-align:center;margin-bottom:8px;padding:6px;background:#0a0a12;border:1px solid #2a2a44">';
+  h+='<span style="font-size:13px;font-family:Share Tech Mono,monospace;font-weight:900;color:'+(dpsDiff>0?'#aa3344':'var(--neon-green)')+'">'+
+    (dpsDiff>0?'\u25b2 THEY DO '+dpsDiff.toLocaleString()+' MORE DPS (+'+dpsDiffPct+'%)':'\u25bc YOU DO '+Math.abs(dpsDiff).toLocaleString()+' MORE DPS')+'</span>';
+  if(Math.abs(timeDiff)>5)h+='<span style="font-size:10px;color:#888;margin-left:12px">\u23f1 '+(timeDiff<0?'Their kill '+Math.abs(timeDiff)+'s shorter':'Your kill '+timeDiff+'s shorter')+'</span>';
   h+='</div>';
   
-  // DPS difference
-  var dpsDiff = theirDps - myDps;
-  var dpsDiffPct = myDps > 0 ? Math.round(dpsDiff/myDps*100) : 0;
-  h+='<div style="text-align:center;margin-bottom:10px;font-size:13px;font-family:Share Tech Mono,monospace;font-weight:900;color:'+(dpsDiff>0?'#aa3344':'var(--neon-green)')+'">'+
-    (dpsDiff>0?'\u25b2 THEY DO '+dpsDiff.toLocaleString()+' MORE DPS (+'+dpsDiffPct+'%)':'\u25bc YOU DO '+Math.abs(dpsDiff).toLocaleString()+' MORE DPS')+
-  '</div>';
+  // ═══ MIRROR GRID ═══
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
   
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
-  
-  // ── THEIR DAMAGE DONE ──
-  // ── SIDE-BY-SIDE DAMAGE ──
-  if (data.dmgDone.length) {
-    var sorted = data.dmgDone.slice().sort(function(a,b){return(b.total||0)-(a.total||0);});
-    h+='<div style="background:#0a0a12;border:1px solid '+col+';padding:8px">';
-    h+='<div style="font-size:10px;color:'+col+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u2694 RANK #'+rankPos+' DAMAGE ('+sorted.length+')</div>';
-    h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Ability</th><th>Total</th><th>DPS</th><th>Hits</th><th>Crit%</th></tr></thead><tbody>';
-    sorted.forEach(function(ab) {
-      var pct = totalDmg>0?Math.round((ab.total||0)/totalDmg*100):0;
-      var hits = (ab.hitCount||0)+(ab.critHitCount||0)+(ab.tickCount||0)+(ab.critTickCount||0);
-      var crits = (ab.critHitCount||0)+(ab.critTickCount||0);
-      var critPct = hits>0?Math.round(crits/hits*100):0;
-      h+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--text-bright);font-weight:700;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(ab.name||'?')+' <span style="color:#444">'+pct+'%</span></td>';
-      h+='<td style="text-align:right;color:'+col+'">'+fmtK(ab.total||0)+'</td>';
-      h+='<td style="text-align:right">'+Math.round((ab.total||0)/fightSec)+'</td>';
-      h+='<td style="text-align:right">'+hits+'</td>';
-      h+='<td style="text-align:right">'+critPct+'%</td></tr>';
+  // Helpers
+  function dmgTbl(entries,totD,sec,accent,label){
+    var s='<div style="background:#0a0a12;border:1px solid '+accent+';padding:8px">';
+    s+='<div style="font-size:10px;color:'+accent+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:4px">\u2694 '+label+'</div>';
+    s+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace">';
+    s+='<thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Ability</th><th style="text-align:right;padding:2px">Total</th><th style="text-align:right;padding:2px">DPS</th><th style="text-align:right;padding:2px">Hits</th><th style="text-align:right;padding:2px">Crit%</th></tr></thead><tbody>';
+    entries.slice().sort(function(a,b){return(b.total||0)-(a.total||0);}).forEach(function(ab){
+      var pct=totD>0?Math.round((ab.total||0)/totD*100):0;
+      var hits=(ab.hitCount||0)+(ab.critHitCount||0)+(ab.tickCount||0)+(ab.critTickCount||0);
+      var crits=(ab.critHitCount||0)+(ab.critTickCount||0);
+      var cp=hits>0?Math.round(crits/hits*100):0;
+      s+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--text-bright);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(ab.name||'?')+' <span style="color:#444">'+pct+'%</span></td>';
+      s+='<td style="text-align:right;color:'+accent+'">'+fmtK(ab.total||0)+'</td>';
+      s+='<td style="text-align:right">'+Math.round((ab.total||0)/sec)+'</td>';
+      s+='<td style="text-align:right">'+hits+'</td>';
+      s+='<td style="text-align:right">'+cp+'%</td></tr>';
     });
-    h+='</tbody></table></div>';
+    return s+'</tbody></table></div>';
   }
-  
-  // ── THEIR CASTS ──
-  if (myData && myData.dmgDone.length) {
-    var mySorted = myData.dmgDone.slice().sort(function(a,b){return(b.total||0)-(a.total||0);});
-    h+='<div style="background:#0a0a12;border:1px solid var(--neon-cyan);padding:8px">';
-    h+='<div style="font-size:10px;color:var(--neon-cyan);font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u2694 YOUR DAMAGE ('+mySorted.length+')</div>';
-    h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Ability</th><th>Total</th><th>DPS</th><th>Crit%</th></tr></thead><tbody>';
-    mySorted.forEach(function(ab) {
-      var pct = myTotalDmg>0?Math.round((ab.total||0)/myTotalDmg*100):0;
-      var hits = (ab.hitCount||0)+(ab.critHitCount||0)+(ab.tickCount||0)+(ab.critTickCount||0);
-      var crits = (ab.critHitCount||0)+(ab.critTickCount||0);
-      var critPct = hits>0?Math.round(crits/hits*100):0;
-      h+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--text-bright);font-weight:700">'+(ab.name||'?')+' <span style="color:#444">'+pct+'%</span></td>';
-      h+='<td style="text-align:right;color:var(--neon-cyan)">'+fmtK(ab.total||0)+'</td>';
-      h+='<td style="text-align:right">'+Math.round((ab.total||0)/myFightSec)+'</td>';
-      h+='<td style="text-align:right">'+critPct+'%</td></tr>';
+  function castsTbl(entries,min,accent,label){
+    var s='<div style="background:#0a0a12;border:1px solid '+accent+';padding:8px">';
+    s+='<div style="font-size:10px;color:'+accent+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:4px">\u26a1 '+label+'</div>';
+    s+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace">';
+    s+='<thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Ability</th><th style="text-align:right;padding:2px">Casts</th><th style="text-align:right;padding:2px">CPM</th></tr></thead><tbody>';
+    entries.slice().sort(function(a,b){return(b.total||0)-(a.total||0);}).forEach(function(c){
+      s+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--text-bright)">'+(c.name||'?')+'</td>';
+      s+='<td style="text-align:right">'+(c.total||0)+'</td>';
+      s+='<td style="text-align:right;color:'+accent+'">'+(min>0?(c.total/min).toFixed(1):'0')+'</td></tr>';
     });
-    h+='</tbody></table></div>';
+    return s+'</tbody></table></div>';
   }
-  // ── SIDE-BY-SIDE CASTS ──
-  if (data.casts.length) {
-    var sortedC = data.casts.slice().sort(function(a,b){return(b.total||0)-(a.total||0);});
-    h+='<div style="background:#0a0a12;border:1px solid '+col+';padding:8px">';
-    h+='<div style="font-size:10px;color:'+col+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u26a1 RANK #'+rankPos+' CASTS ('+sortedC.length+')</div>';
-    h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Ability</th><th>Casts</th><th>CPM</th></tr></thead><tbody>';
-    sortedC.forEach(function(c) {
-      var cpm = fightMin>0?(c.total/fightMin).toFixed(1):'0';
-      h+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--text-bright);font-weight:700">'+(c.name||'?')+'</td>';
-      h+='<td style="text-align:right;font-weight:700">'+(c.total||0)+'</td>';
-      h+='<td style="text-align:right;color:'+col+'">'+cpm+'</td></tr>';
+  function buffPills(entries,tt,accent,label){
+    var s='<div style="background:#0a0a12;border:1px solid '+accent+';padding:8px">';
+    s+='<div style="font-size:10px;color:'+accent+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:4px">'+label+'</div>';
+    s+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
+    entries.slice().sort(function(a,b){return(b.totalUptime||0)-(a.totalUptime||0);}).forEach(function(b){
+      var up=tt>0?Math.round((b.totalUptime||0)/tt*100):0;if(up<1)return;
+      var ico=b.icon?'https://wow.zamimg.com/images/wow/icons/small/'+b.icon+'.jpg':'';
+      s+='<div style="display:flex;align-items:center;gap:3px;background:#14141e;border:1px solid #1a1a34;padding:2px 5px" title="'+(b.name||'')+' '+up+'%">';
+      if(ico)s+='<img src="'+ico+'" style="width:16px;height:16px;border:1px solid '+accent+'" onerror="this.style.display=\'none\'">';
+      s+='<span style="font-size:9px;color:var(--text-bright);max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(b.name||'?')+'</span>';
+      s+='<span style="font-size:9px;font-weight:900;color:'+accent+'">'+up+'%</span></div>';
     });
-    h+='</tbody></table></div>';
+    return s+'</div></div>';
   }
-  
-  // ── THEIR BUFFS ──
-  if (data.buffs.length) {
-    var sortedB = data.buffs.slice().sort(function(a,b){return(b.totalUptime||0)-(a.totalUptime||0);});
-    if (myData && myData.casts.length) {
-    var mySortedC = myData.casts.slice().sort(function(a,b){return(b.total||0)-(a.total||0);});
-    var myFightMin2 = myFightSec/60;
-    h+='<div style="background:#0a0a12;border:1px solid var(--neon-cyan);padding:8px">';
-    h+='<div style="font-size:10px;color:var(--neon-cyan);font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u26a1 YOUR CASTS ('+mySortedC.length+')</div>';
-    h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Ability</th><th>Casts</th><th>CPM</th></tr></thead><tbody>';
-    mySortedC.forEach(function(c) {
-      var cpm = myFightMin2>0?(c.total/myFightMin2).toFixed(1):'0';
-      h+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--text-bright);font-weight:700">'+(c.name||'?')+'</td>';
-      h+='<td style="text-align:right;font-weight:700">'+(c.total||0)+'</td>';
-      h+='<td style="text-align:right;color:var(--neon-cyan)">'+cpm+'</td></tr>';
+  function dtTbl(entries,sec,accent,label){
+    var tot=0;entries.forEach(function(e){tot+=e.total||0;});
+    var s='<div style="background:#0a0a12;border:1px solid '+accent+';padding:8px">';
+    s+='<div style="font-size:10px;color:var(--neon-orange);font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:4px">\ud83d\udee1 '+label+' ('+Math.round(tot/sec)+' DTPS)</div>';
+    s+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace">';
+    s+='<thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Source</th><th style="text-align:right;padding:2px">Total</th><th style="text-align:right;padding:2px">DTPS</th></tr></thead><tbody>';
+    entries.slice().sort(function(a,b){return(b.total||0)-(a.total||0);}).slice(0,10).forEach(function(ab){
+      s+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--neon-orange)">'+(ab.name||'?')+'</td>';
+      s+='<td style="text-align:right">'+fmtK(ab.total||0)+'</td>';
+      s+='<td style="text-align:right">'+Math.round((ab.total||0)/sec)+'</td></tr>';
     });
-    h+='</tbody></table></div>';
+    return s+'</tbody></table></div>';
   }
-  // Buffs: RANK on left, YOURS on right
-    h+='<div style="background:#0a0a12;border:1px solid '+col+';padding:8px">';
-    h+='<div style="font-size:10px;color:'+col+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u2b06 RANK #'+rankPos+' BUFFS ('+sortedB.length+')</div>';
-    h+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
-    sortedB.forEach(function(b) {
-      var upPct = data.totalTime>0?Math.round((b.totalUptime||0)/data.totalTime*100):0;
-      if (upPct < 1) return;
-      var iconUrl = b.icon ? 'https://wow.zamimg.com/images/wow/icons/small/'+b.icon+'.jpg' : '';
-      h+='<div style="display:flex;align-items:center;gap:3px;background:#14141e;border:1px solid #1a1a34;padding:2px 5px" title="'+(b.name||'')+' '+upPct+'%">';
-      if(iconUrl) h+='<img src="'+iconUrl+'" style="width:16px;height:16px;border:1px solid '+col+'" onerror="this.style.display=\x27none\x27">';
-      h+='<span style="font-size:10px;color:var(--text-bright);font-weight:700;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(b.name||'?')+'</span>';
-      h+='<span style="font-size:10px;font-weight:900;color:'+col+'">'+upPct+'%</span>';
-      h+='</div>';
-    });
-    h+='</div></div>';
-    if (myData && myData.buffs.length) {
-      var mySortedB = myData.buffs.slice().sort(function(a,b){return(b.totalUptime||0)-(a.totalUptime||0);});
-      h+='<div style="background:#0a0a12;border:1px solid var(--neon-cyan);padding:8px">';
-      h+='<div style="font-size:10px;color:var(--neon-cyan);font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u2b06 YOUR BUFFS ('+mySortedB.length+')</div>';
-      h+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
-      mySortedB.forEach(function(b) {
-        var upPct = myData.totalTime>0?Math.round((b.totalUptime||0)/myData.totalTime*100):0;
-        if (upPct < 1) return;
-        var iconUrl = b.icon ? 'https://wow.zamimg.com/images/wow/icons/small/'+b.icon+'.jpg' : '';
-        h+='<div style="display:flex;align-items:center;gap:3px;background:#14141e;border:1px solid #1a1a34;padding:2px 5px" title="'+(b.name||'')+' '+upPct+'%">';
-        if(iconUrl) h+='<img src="'+iconUrl+'" style="width:16px;height:16px;border:1px solid var(--neon-cyan)" onerror="this.style.display=\x27none\x27">';
-        h+='<span style="font-size:10px;color:var(--text-bright);font-weight:700;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(b.name||'?')+'</span>';
-        h+='<span style="font-size:10px;font-weight:900;color:var(--neon-cyan)">'+upPct+'%</span>';
-        h+='</div>';
-      });
-      h+='</div></div>';
-    }
-  }
+  var empty='<div style="background:#0a0a12;border:1px solid #2a2a44;padding:20px;text-align:center;color:#555;font-size:10px">No data</div>';
   
-  // ── SIDE-BY-SIDE DEBUFFS ──
-  if (data.debuffs && data.debuffs.length) {
-    var theirDebuffs = data.debuffs.slice().sort(function(a,b){return(b.totalUptime||0)-(a.totalUptime||0);});
-    h+='<div style="background:#0a0a12;border:1px solid '+col+';padding:8px">';
-    h+='<div style="font-size:10px;color:'+col+';font-family:Orbitron,monospace;letter-spacing:1px;margin-bottom:6px">\u2b07 RANK #'+rankPos+' DEBUFFS ('+theirDebuffs.length+')</div>';
-    h+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
-    theirDebuffs.forEach(function(b){var up=data.totalTime>0?Math.round((b.totalUptime||0)/data.totalTime*100):0;if(up<1)return;var ico=b.icon?'https://wow.zamimg.com/images/wow/icons/small/'+b.icon+'.jpg':'';h+='<div style="display:flex;align-items:center;gap:3px;background:#14141e;border:1px solid #1a1a34;padding:2px 5px" title="'+(b.name||'')+' '+up+'%">';if(ico)h+='<img src="'+ico+'" style="width:16px;height:16px;border:1px solid '+col+'" onerror="this.style.display=\'none\'">';h+='<span style="font-size:10px;color:var(--neon-purple);font-weight:700;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(b.name||'?')+'</span><span style="font-size:10px;font-weight:900;color:#888">'+up+'%</span></div>';});
-    h+='</div></div>';
-  }
-  if (myData && myData.debuffs && myData.debuffs.length) {
-    var myDebuffs = myData.debuffs.slice().sort(function(a,b){return(b.totalUptime||0)-(a.totalUptime||0);});
-    h+='<div style="background:#0a0a12;border:1px solid var(--neon-cyan);padding:8px">';
-    h+='<div style="font-size:10px;color:var(--neon-cyan);font-family:Orbitron,monospace;letter-spacing:1px;margin-bottom:6px">\u2b07 YOUR DEBUFFS ('+myDebuffs.length+')</div>';
-    h+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
-    myDebuffs.forEach(function(b){var up=myData.totalTime>0?Math.round((b.totalUptime||0)/myData.totalTime*100):0;if(up<1)return;var ico=b.icon?'https://wow.zamimg.com/images/wow/icons/small/'+b.icon+'.jpg':'';h+='<div style="display:flex;align-items:center;gap:3px;background:#14141e;border:1px solid #1a1a34;padding:2px 5px" title="'+(b.name||'')+' '+up+'%">';if(ico)h+='<img src="'+ico+'" style="width:16px;height:16px;border:1px solid var(--neon-cyan)" onerror="this.style.display=\'none\'">';h+='<span style="font-size:10px;color:var(--neon-purple);font-weight:700;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(b.name||'?')+'</span><span style="font-size:10px;font-weight:900;color:#888">'+up+'%</span></div>';});
-    h+='</div></div>';
-  }
-  
-  // ── SIDE-BY-SIDE DAMAGE TAKEN ──
-  if (data.dmgTaken && data.dmgTaken.length) {
-    var theirDT = data.dmgTaken.slice().sort(function(a,b){return(b.total||0)-(a.total||0);});
-    var theirTotalDT=0;theirDT.forEach(function(e){theirTotalDT+=e.total||0;});
-    h+='<div style="background:#0a0a12;border:1px solid '+col+';padding:8px">';
-    h+='<div style="font-size:10px;color:var(--neon-orange);font-family:Orbitron,monospace;letter-spacing:1px;margin-bottom:6px">\ud83d\udee1 RANK DMGTAKEN ('+Math.round(theirTotalDT/fightSec)+' DTPS)</div>';
-    h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><tbody>';
-    theirDT.slice(0,10).forEach(function(ab){h+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--neon-orange);font-weight:700">'+(ab.name||'?')+'</td><td style="text-align:right">'+fmtK(ab.total||0)+'</td></tr>';});
-    h+='</tbody></table></div>';
-  }
-  if (myData && myData.dmgTaken && myData.dmgTaken.length) {
-    var myDT = myData.dmgTaken.slice().sort(function(a,b){return(b.total||0)-(a.total||0);});
-    var myTotalDT=0;myDT.forEach(function(e){myTotalDT+=e.total||0;});
-    h+='<div style="background:#0a0a12;border:1px solid var(--neon-cyan);padding:8px">';
-    h+='<div style="font-size:10px;color:var(--neon-orange);font-family:Orbitron,monospace;letter-spacing:1px;margin-bottom:6px">\ud83d\udee1 YOUR DMGTAKEN ('+Math.round(myTotalDT/myFightSec)+' DTPS)</div>';
-    h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><tbody>';
-    myDT.slice(0,10).forEach(function(ab){h+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--neon-orange);font-weight:700">'+(ab.name||'?')+'</td><td style="text-align:right">'+fmtK(ab.total||0)+'</td></tr>';});
-    h+='</tbody></table></div>';
-  }
-  
-  // ── DEATHS COMPARISON ──
-  var theirDeaths = data.deaths ? data.deaths.filter(function(d){return d.name===data.playerName;}) : [];
-  var myDeaths = (myData && myData.deaths) ? myData.deaths.filter(function(d){return d.name===(myData.playerName||'');}) : [];
-  if (theirDeaths.length || myDeaths.length) {
-    h+='<div style="background:#0a0a12;border:1px solid '+col+';padding:8px">';
-    h+='<div style="font-size:10px;color:#aa3344;font-family:Orbitron,monospace;letter-spacing:1px;margin-bottom:6px">\u2620 RANK DEATHS: '+theirDeaths.length+'</div>';
+  // DAMAGE
+  h+=data.dmgDone.length?dmgTbl(data.dmgDone,totalDmg,fightSec,col,'RANK #'+rankPos+' DAMAGE ('+data.dmgDone.length+')'):empty;
+  h+=(my&&my.dmgDone.length)?dmgTbl(my.dmgDone,myTotalDmg,myFightSec,'var(--neon-cyan)','YOUR DAMAGE ('+my.dmgDone.length+')'):empty;
+  // CASTS
+  h+=data.casts.length?castsTbl(data.casts,fightMin,col,'RANK CASTS ('+data.casts.length+')'):empty;
+  h+=(my&&my.casts&&my.casts.length)?castsTbl(my.casts,myFightMin,'var(--neon-cyan)','YOUR CASTS ('+my.casts.length+')'):empty;
+  // BUFFS
+  h+=data.buffs.length?buffPills(data.buffs,data.totalTime,col,'\u2b06 RANK BUFFS ('+data.buffs.length+')'):empty;
+  h+=(my&&my.buffs&&my.buffs.length)?buffPills(my.buffs,my.totalTime,'var(--neon-cyan)','\u2b06 YOUR BUFFS ('+my.buffs.length+')'):empty;
+  // DEBUFFS
+  h+=(data.debuffs&&data.debuffs.length)?buffPills(data.debuffs,data.totalTime,col,'\u2b07 RANK DEBUFFS ('+data.debuffs.length+')'):empty;
+  h+=(my&&my.debuffs&&my.debuffs.length)?buffPills(my.debuffs,my.totalTime,'var(--neon-cyan)','\u2b07 YOUR DEBUFFS ('+my.debuffs.length+')'):empty;
+  // DAMAGE TAKEN
+  h+=(data.dmgTaken&&data.dmgTaken.length)?dtTbl(data.dmgTaken,fightSec,col,'RANK DMGTAKEN'):empty;
+  h+=(my&&my.dmgTaken&&my.dmgTaken.length)?dtTbl(my.dmgTaken,myFightSec,'var(--neon-cyan)','YOUR DMGTAKEN'):empty;
+  // DEATHS
+  var theirDeaths=data.deaths?data.deaths.filter(function(d){return d.name===data.playerName;}):[];
+  var myDeaths=(my&&my.deaths)?my.deaths.filter(function(d){return d.name===(my.playerName||'');}):[];
+  if(theirDeaths.length||myDeaths.length){
+    h+='<div style="background:#0a0a12;border:1px solid '+col+';padding:8px"><div style="font-size:10px;color:#aa3344;font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:4px">\u2620 RANK DEATHS: '+theirDeaths.length+'</div>';
     theirDeaths.forEach(function(d){if(d.killingBlow)h+='<div style="font-size:10px;color:#888">Killed by: <span style="color:#ff6666">'+(d.killingBlow.name||'?')+'</span></div>';});
     if(!theirDeaths.length)h+='<div style="font-size:10px;color:var(--neon-green)">No deaths \u2714</div>';
     h+='</div>';
-    h+='<div style="background:#0a0a12;border:1px solid var(--neon-cyan);padding:8px">';
-    h+='<div style="font-size:10px;color:#aa3344;font-family:Orbitron,monospace;letter-spacing:1px;margin-bottom:6px">\u2620 YOUR DEATHS: '+myDeaths.length+'</div>';
+    h+='<div style="background:#0a0a12;border:1px solid var(--neon-cyan);padding:8px"><div style="font-size:10px;color:#aa3344;font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:4px">\u2620 YOUR DEATHS: '+myDeaths.length+'</div>';
     myDeaths.forEach(function(d){if(d.killingBlow)h+='<div style="font-size:10px;color:#888">Killed by: <span style="color:#ff6666">'+(d.killingBlow.name||'?')+'</span></div>';});
     if(!myDeaths.length)h+='<div style="font-size:10px;color:var(--neon-green)">No deaths \u2714</div>';
     h+='</div>';
   }
   
-  h+='</div>'; // end grid
-  h+='</div>'; // end container
+  h+='</div></div>';
   return h;
 }
 
-// ═══════════════════════════════════════════
-// RANK LIMIT EDITOR
-// ═══════════════════════════════════════════
 function openRankLimitEditor(cls, boss) {
   var spec = '';
   if (window._perfPlayer) {
