@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TBC Assignment Sheet</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script>var whTooltips = {colorLinks: false, iconizeLinks: false, renameLinks: false};</script>
+<script src="https://wow.zamimg.com/js/tooltips.js"></script>
 <style>
 :root {
   --bg-dark: #0a0a0f;
@@ -6685,147 +6687,100 @@ function renderComparisonHTML(data, rankPos) {
   var fightMin = fightSec/60;
   var totalDmg = 0; data.dmgDone.forEach(function(e){totalDmg+=e.total||0;});
   var col = rankColor((window.rankPositions||[]).indexOf(rankPos));
-  
   var my = null;
   if (window._lastFightCacheKey && window._fightDetailCache) my = window._fightDetailCache[window._lastFightCacheKey];
   var myTotalDmg = 0, myFightSec = 1, myFightMin = 0;
   if (my) { my.dmgDone.forEach(function(e){myTotalDmg+=e.total||0;}); myFightSec = my.totalTime ? my.totalTime/1000 : 1; myFightMin = myFightSec/60; }
   var myDps = my ? Math.round(myTotalDmg/myFightSec) : 0;
   var theirDps = Math.round(totalDmg/fightSec);
-  
-  var LUST = ['Bloodlust','Heroism','Drums of Battle'];
-  function findLust(buffs,tt){var f=[];(buffs||[]).forEach(function(b){LUST.forEach(function(ln){if(b.name&&b.name.indexOf(ln)!==-1){f.push({name:b.name,up:tt>0?Math.round((b.totalUptime||0)/tt*100):0});}});});return f;}
-  var theirLust = findLust(data.buffs, data.totalTime);
-  var myLust = my ? findLust(my.buffs, my.totalTime) : [];
+  var LUST=['Bloodlust','Heroism','Drums of Battle'];
+  function findLust(buffs,tt){var f=[];(buffs||[]).forEach(function(b){LUST.forEach(function(ln){if(b.name&&b.name.indexOf(ln)!==-1)f.push({name:b.name,up:tt>0?Math.round((b.totalUptime||0)/tt*100):0});});});return f;}
+  var theirLust=findLust(data.buffs,data.totalTime),myLust=my?findLust(my.buffs,my.totalTime):[];
   function fmtTime(s){return Math.floor(s/60)+':'+('0'+Math.round(s%60)).slice(-2);}
-  
+  function wh(name,id){if(!id)return '<span style="color:var(--text-bright)">'+name+'</span>';return '<a href="https://tbc.wowhead.com/spell='+id+'" data-wowhead="domain=tbc" style="color:var(--text-bright);text-decoration:none" target="_blank">'+name+'</a>';}
+
   h+='<div style="background:#0d0d18;border:1px solid '+col+';padding:12px;margin-top:8px">';
-  
-  // ═══ HEADER ═══
+  // HEADER
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px">';
   h+='<div style="text-align:center;padding:10px;background:#14141e;border:1px solid '+col+'">';
   h+='<div style="font-family:Orbitron,sans-serif;font-size:11px;color:'+col+';letter-spacing:1px;margin-bottom:4px">RANK #'+rankPos+' \u2014 '+(data.playerName||'?')+'</div>';
-  h+='<div style="font-size:24px;font-weight:900;color:'+col+';font-family:Orbitron,sans-serif">'+theirDps.toLocaleString()+' <span style="font-size:11px;color:#666">DPS</span></div>';
-  h+='<div style="display:flex;justify-content:center;gap:12px;margin-top:6px;font-size:10px;font-family:Share Tech Mono,monospace">';
-  h+='<span style="color:#888">\u23f1 '+fmtTime(fightSec)+'</span>';
-  h+='<span style="color:#888">DMG '+fmtK(totalDmg)+'</span>';
-  if(data.server)h+='<span style="color:#555">'+data.server+'</span>';
+  h+='<div style="font-size:24px;font-weight:900;color:'+col+';font-family:Orbitron,sans-serif">'+theirDps.toLocaleString()+' <span style="font-size:11px;color:var(--text-bright)">DPS</span></div>';
+  h+='<div style="display:flex;justify-content:center;gap:12px;margin-top:6px;font-size:11px;font-family:Share Tech Mono,monospace">';
+  h+='<span style="color:var(--text-bright)">\u23f1 '+fmtTime(fightSec)+'</span><span style="color:var(--text-bright)">DMG '+fmtK(totalDmg)+'</span>';
+  if(data.server)h+='<span style="color:var(--text-sub)">'+data.server+'</span>';
   h+='</div>';
-  if(theirLust.length)h+='<div style="margin-top:4px;font-size:10px;color:var(--neon-orange);font-weight:900">\u26a1 '+theirLust.map(function(l){return l.name+' '+l.up+'%';}).join(', ')+'</div>';
-  if(fightSec<90)h+='<div style="margin-top:2px;font-size:9px;color:var(--neon-yellow);font-weight:900">\ud83d\udea8 SPEED KILL</div>';
+  if(theirLust.length)h+='<div style="margin-top:4px;font-size:11px;color:var(--neon-orange);font-weight:900">\u26a1 '+theirLust.map(function(l){return l.name+' '+l.up+'%';}).join(', ')+'</div>';
+  if(fightSec<90)h+='<div style="margin-top:2px;font-size:10px;color:var(--neon-yellow);font-weight:900">\ud83d\udea8 SPEED KILL</div>';
   h+='</div>';
   h+='<div style="text-align:center;padding:10px;background:#14141e;border:1px solid var(--neon-cyan)">';
   h+='<div style="font-family:Orbitron,sans-serif;font-size:11px;color:var(--neon-cyan);letter-spacing:1px;margin-bottom:4px">YOUR FIGHT</div>';
-  h+='<div style="font-size:24px;font-weight:900;color:var(--neon-cyan);font-family:Orbitron,sans-serif">'+myDps.toLocaleString()+' <span style="font-size:11px;color:#666">DPS</span></div>';
-  h+='<div style="display:flex;justify-content:center;gap:12px;margin-top:6px;font-size:10px;font-family:Share Tech Mono,monospace">';
-  h+='<span style="color:#888">\u23f1 '+fmtTime(myFightSec)+'</span>';
-  h+='<span style="color:#888">DMG '+fmtK(myTotalDmg)+'</span>';
+  h+='<div style="font-size:24px;font-weight:900;color:var(--neon-cyan);font-family:Orbitron,sans-serif">'+myDps.toLocaleString()+' <span style="font-size:11px;color:var(--text-bright)">DPS</span></div>';
+  h+='<div style="display:flex;justify-content:center;gap:12px;margin-top:6px;font-size:11px;font-family:Share Tech Mono,monospace">';
+  h+='<span style="color:var(--text-bright)">\u23f1 '+fmtTime(myFightSec)+'</span><span style="color:var(--text-bright)">DMG '+fmtK(myTotalDmg)+'</span>';
   h+='</div>';
-  if(myLust.length)h+='<div style="margin-top:4px;font-size:10px;color:var(--neon-orange);font-weight:900">\u26a1 '+myLust.map(function(l){return l.name+' '+l.up+'%';}).join(', ')+'</div>';
-  if(myFightSec<90)h+='<div style="margin-top:2px;font-size:9px;color:var(--neon-yellow);font-weight:900">\ud83d\udea8 SPEED KILL</div>';
+  if(myLust.length)h+='<div style="margin-top:4px;font-size:11px;color:var(--neon-orange);font-weight:900">\u26a1 '+myLust.map(function(l){return l.name+' '+l.up+'%';}).join(', ')+'</div>';
+  if(myFightSec<90)h+='<div style="margin-top:2px;font-size:10px;color:var(--neon-yellow);font-weight:900">\ud83d\udea8 SPEED KILL</div>';
   h+='</div></div>';
-  
-  // ═══ DIFF BAR ═══
+  // DIFF
   var dpsDiff=theirDps-myDps,dpsDiffPct=myDps>0?Math.round(dpsDiff/myDps*100):0,timeDiff=Math.round(fightSec-myFightSec);
   h+='<div style="text-align:center;margin-bottom:8px;padding:6px;background:#0a0a12;border:1px solid #2a2a44">';
   h+='<span style="font-size:13px;font-family:Share Tech Mono,monospace;font-weight:900;color:'+(dpsDiff>0?'#aa3344':'var(--neon-green)')+'">'+
     (dpsDiff>0?'\u25b2 THEY DO '+dpsDiff.toLocaleString()+' MORE DPS (+'+dpsDiffPct+'%)':'\u25bc YOU DO '+Math.abs(dpsDiff).toLocaleString()+' MORE DPS')+'</span>';
-  if(Math.abs(timeDiff)>5)h+='<span style="font-size:10px;color:#888;margin-left:12px">\u23f1 '+(timeDiff<0?'Their kill '+Math.abs(timeDiff)+'s shorter':'Your kill '+timeDiff+'s shorter')+'</span>';
+  if(Math.abs(timeDiff)>5)h+='<span style="font-size:11px;color:var(--text-sub);margin-left:12px">\u23f1 '+(timeDiff<0?'Their kill '+Math.abs(timeDiff)+'s shorter':'Your kill '+timeDiff+'s shorter')+'</span>';
   h+='</div>';
-  
-  // ═══ MIRROR GRID ═══
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-  
-  // Helpers
-  function dmgTbl(entries,totD,sec,accent,label){
-    var s='<div style="background:#0a0a12;border:1px solid '+accent+';padding:8px">';
-    s+='<div style="font-size:10px;color:'+accent+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:4px">\u2694 '+label+'</div>';
-    s+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace">';
-    s+='<thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Ability</th><th style="text-align:right;padding:2px">Total</th><th style="text-align:right;padding:2px">DPS</th><th style="text-align:right;padding:2px">Hits</th><th style="text-align:right;padding:2px">Crit%</th></tr></thead><tbody>';
-    entries.slice().sort(function(a,b){return(b.total||0)-(a.total||0);}).forEach(function(ab){
-      var pct=totD>0?Math.round((ab.total||0)/totD*100):0;
-      var hits=(ab.hitCount||0)+(ab.critHitCount||0)+(ab.tickCount||0)+(ab.critTickCount||0);
-      var crits=(ab.critHitCount||0)+(ab.critTickCount||0);
-      var cp=hits>0?Math.round(crits/hits*100):0;
-      s+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--text-bright);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(ab.name||'?')+' <span style="color:#444">'+pct+'%</span></td>';
-      s+='<td style="text-align:right;color:'+accent+'">'+fmtK(ab.total||0)+'</td>';
-      s+='<td style="text-align:right">'+Math.round((ab.total||0)/sec)+'</td>';
-      s+='<td style="text-align:right">'+hits+'</td>';
-      s+='<td style="text-align:right">'+cp+'%</td></tr>';
-    });
-    return s+'</tbody></table></div>';
-  }
-  function castsTbl(entries,min,accent,label){
-    var s='<div style="background:#0a0a12;border:1px solid '+accent+';padding:8px">';
-    s+='<div style="font-size:10px;color:'+accent+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:4px">\u26a1 '+label+'</div>';
-    s+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace">';
-    s+='<thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Ability</th><th style="text-align:right;padding:2px">Casts</th><th style="text-align:right;padding:2px">CPM</th></tr></thead><tbody>';
-    entries.slice().sort(function(a,b){return(b.total||0)-(a.total||0);}).forEach(function(c){
-      s+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--text-bright)">'+(c.name||'?')+'</td>';
-      s+='<td style="text-align:right">'+(c.total||0)+'</td>';
-      s+='<td style="text-align:right;color:'+accent+'">'+(min>0?(c.total/min).toFixed(1):'0')+'</td></tr>';
-    });
-    return s+'</tbody></table></div>';
-  }
-  function buffPills(entries,tt,accent,label){
-    var s='<div style="background:#0a0a12;border:1px solid '+accent+';padding:8px">';
-    s+='<div style="font-size:10px;color:'+accent+';font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:4px">'+label+'</div>';
-    s+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
-    entries.slice().sort(function(a,b){return(b.totalUptime||0)-(a.totalUptime||0);}).forEach(function(b){
-      var up=tt>0?Math.round((b.totalUptime||0)/tt*100):0;if(up<1)return;
-      var ico=b.icon?'https://wow.zamimg.com/images/wow/icons/small/'+b.icon+'.jpg':'';
-      s+='<div style="display:flex;align-items:center;gap:3px;background:#14141e;border:1px solid #1a1a34;padding:2px 5px" title="'+(b.name||'')+' '+up+'%">';
-      if(ico)s+='<img src="'+ico+'" style="width:16px;height:16px;border:1px solid '+accent+'" onerror="this.style.display=\'none\'">';
-      s+='<span style="font-size:9px;color:var(--text-bright);max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(b.name||'?')+'</span>';
-      s+='<span style="font-size:9px;font-weight:900;color:'+accent+'">'+up+'%</span></div>';
-    });
-    return s+'</div></div>';
-  }
-  function dtTbl(entries,sec,accent,label){
-    var tot=0;entries.forEach(function(e){tot+=e.total||0;});
-    var s='<div style="background:#0a0a12;border:1px solid '+accent+';padding:8px">';
-    s+='<div style="font-size:10px;color:var(--neon-orange);font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:4px">\ud83d\udee1 '+label+' ('+Math.round(tot/sec)+' DTPS)</div>';
-    s+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace">';
-    s+='<thead><tr style="color:#555;border-bottom:1px solid #1a1a34"><th style="text-align:left;padding:2px">Source</th><th style="text-align:right;padding:2px">Total</th><th style="text-align:right;padding:2px">DTPS</th></tr></thead><tbody>';
-    entries.slice().sort(function(a,b){return(b.total||0)-(a.total||0);}).slice(0,10).forEach(function(ab){
-      s+='<tr style="border-bottom:1px solid #14141e"><td style="padding:2px;color:var(--neon-orange)">'+(ab.name||'?')+'</td>';
-      s+='<td style="text-align:right">'+fmtK(ab.total||0)+'</td>';
-      s+='<td style="text-align:right">'+Math.round((ab.total||0)/sec)+'</td></tr>';
-    });
-    return s+'</tbody></table></div>';
-  }
-  var empty='<div style="background:#0a0a12;border:1px solid #2a2a44;padding:20px;text-align:center;color:#555;font-size:10px">No data</div>';
-  
-  // DAMAGE
-  h+=data.dmgDone.length?dmgTbl(data.dmgDone,totalDmg,fightSec,col,'RANK #'+rankPos+' DAMAGE ('+data.dmgDone.length+')'):empty;
-  h+=(my&&my.dmgDone.length)?dmgTbl(my.dmgDone,myTotalDmg,myFightSec,'var(--neon-cyan)','YOUR DAMAGE ('+my.dmgDone.length+')'):empty;
-  // CASTS
-  h+=data.casts.length?castsTbl(data.casts,fightMin,col,'RANK CASTS ('+data.casts.length+')'):empty;
-  h+=(my&&my.casts&&my.casts.length)?castsTbl(my.casts,myFightMin,'var(--neon-cyan)','YOUR CASTS ('+my.casts.length+')'):empty;
-  // BUFFS
-  h+=data.buffs.length?buffPills(data.buffs,data.totalTime,col,'\u2b06 RANK BUFFS ('+data.buffs.length+')'):empty;
-  h+=(my&&my.buffs&&my.buffs.length)?buffPills(my.buffs,my.totalTime,'var(--neon-cyan)','\u2b06 YOUR BUFFS ('+my.buffs.length+')'):empty;
-  // DEBUFFS
-  h+=(data.debuffs&&data.debuffs.length)?buffPills(data.debuffs,data.totalTime,col,'\u2b07 RANK DEBUFFS ('+data.debuffs.length+')'):empty;
-  h+=(my&&my.debuffs&&my.debuffs.length)?buffPills(my.debuffs,my.totalTime,'var(--neon-cyan)','\u2b07 YOUR DEBUFFS ('+my.debuffs.length+')'):empty;
-  // DAMAGE TAKEN
-  h+=(data.dmgTaken&&data.dmgTaken.length)?dtTbl(data.dmgTaken,fightSec,col,'RANK DMGTAKEN'):empty;
-  h+=(my&&my.dmgTaken&&my.dmgTaken.length)?dtTbl(my.dmgTaken,myFightSec,'var(--neon-cyan)','YOUR DMGTAKEN'):empty;
+
+  // ALIGNED DAMAGE
+  var theirDmg=data.dmgDone.slice().sort(function(a,b){return(b.total||0)-(a.total||0);});
+  var myDmg=(my&&my.dmgDone)?my.dmgDone.slice().sort(function(a,b){return(b.total||0)-(a.total||0);}):[]; 
+  var allAb=[],seen={};
+  theirDmg.forEach(function(a){if(!seen[a.name]){seen[a.name]=true;allAb.push(a.name);}});
+  myDmg.forEach(function(a){if(!seen[a.name]){seen[a.name]=true;allAb.push(a.name);}});
+  var tMap={};theirDmg.forEach(function(a){tMap[a.name]=a;});
+  var mMap={};myDmg.forEach(function(a){mMap[a.name]=a;});
+  function abS(ab,sec,totD){if(!ab)return null;var hits=(ab.hitCount||0)+(ab.critHitCount||0)+(ab.tickCount||0)+(ab.critTickCount||0);var cr=(ab.critHitCount||0)+(ab.critTickCount||0);return{total:ab.total||0,dps:Math.round((ab.total||0)/sec),hits:hits,crit:hits>0?Math.round(cr/hits*100):0,pct:totD>0?Math.round((ab.total||0)/totD*100):0,id:ab.id||0};}
+  var blank='<td style="color:#333">\u2014</td><td></td><td></td><td></td><td></td>';
+  h+='<div class="data-card" style="margin-bottom:8px;padding:10px"><div style="font-size:11px;color:var(--neon-cyan);font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u2694 DAMAGE DONE</div>';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="border-bottom:1px solid var(--border)">';
+  h+='<th style="text-align:left;padding:3px;color:'+col+'">RANK ABILITY</th><th style="text-align:right;padding:3px;color:'+col+'">TOTAL</th><th style="text-align:right;padding:3px;color:'+col+'">DPS</th><th style="text-align:right;padding:3px;color:'+col+'">HITS</th><th style="text-align:right;padding:3px;color:'+col+'">CRIT%</th>';
+  h+='<th style="width:2px"></th>';
+  h+='<th style="text-align:left;padding:3px;color:var(--neon-cyan)">YOUR ABILITY</th><th style="text-align:right;padding:3px;color:var(--neon-cyan)">TOTAL</th><th style="text-align:right;padding:3px;color:var(--neon-cyan)">DPS</th><th style="text-align:right;padding:3px;color:var(--neon-cyan)">HITS</th><th style="text-align:right;padding:3px;color:var(--neon-cyan)">CRIT%</th>';
+  h+='</tr></thead><tbody>';
+  allAb.forEach(function(name){var t=abS(tMap[name],fightSec,totalDmg),m=abS(mMap[name],myFightSec,myTotalDmg);h+='<tr style="border-bottom:1px solid #1a1a34">';if(t){h+='<td style="padding:3px">'+wh(name,t.id)+' <span style="color:#666">'+t.pct+'%</span></td><td style="text-align:right;color:'+col+'">'+fmtK(t.total)+'</td><td style="text-align:right;color:var(--text-bright)">'+t.dps+'</td><td style="text-align:right;color:var(--text-bright)">'+t.hits+'</td><td style="text-align:right;color:var(--text-bright)">'+t.crit+'%</td>';}else{h+=blank;}h+='<td style="background:#2a2a44"></td>';if(m){h+='<td style="padding:3px">'+wh(name,m.id)+' <span style="color:#666">'+m.pct+'%</span></td><td style="text-align:right;color:var(--neon-cyan)">'+fmtK(m.total)+'</td><td style="text-align:right;color:var(--text-bright)">'+m.dps+'</td><td style="text-align:right;color:var(--text-bright)">'+m.hits+'</td><td style="text-align:right;color:var(--text-bright)">'+m.crit+'%</td>';}else{h+=blank;}h+='</tr>';});
+  h+='</tbody></table></div>';
+
+  // ALIGNED CASTS
+  var theirC=data.casts.slice().sort(function(a,b){return(b.total||0)-(a.total||0);});
+  var myC=(my&&my.casts)?my.casts.slice().sort(function(a,b){return(b.total||0)-(a.total||0);}):[]; 
+  var allC=[],seenC={};theirC.forEach(function(c){if(!seenC[c.name]){seenC[c.name]=true;allC.push(c.name);}});myC.forEach(function(c){if(!seenC[c.name]){seenC[c.name]=true;allC.push(c.name);}});
+  var tcMap={};theirC.forEach(function(c){tcMap[c.name]=c;});var mcMap={};myC.forEach(function(c){mcMap[c.name]=c;});
+  if(allC.length){h+='<div class="data-card" style="margin-bottom:8px;padding:10px"><div style="font-size:11px;color:var(--neon-cyan);font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\u26a1 CASTS</div>';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="border-bottom:1px solid var(--border)">';
+  h+='<th style="text-align:left;padding:3px;color:'+col+'">RANK</th><th style="text-align:right;padding:3px;color:'+col+'">CASTS</th><th style="text-align:right;padding:3px;color:'+col+'">CPM</th><th style="width:2px"></th><th style="text-align:left;padding:3px;color:var(--neon-cyan)">YOURS</th><th style="text-align:right;padding:3px;color:var(--neon-cyan)">CASTS</th><th style="text-align:right;padding:3px;color:var(--neon-cyan)">CPM</th>';
+  h+='</tr></thead><tbody>';
+  allC.forEach(function(name){var tc=tcMap[name],mc=mcMap[name];h+='<tr style="border-bottom:1px solid #1a1a34">';if(tc){h+='<td style="padding:3px">'+wh(name,tc.id||0)+'</td><td style="text-align:right;color:var(--text-bright)">'+(tc.total||0)+'</td><td style="text-align:right;color:'+col+'">'+(fightMin>0?(tc.total/fightMin).toFixed(1):'0')+'</td>';}else{h+='<td style="color:#333">\u2014</td><td></td><td></td>';}h+='<td style="background:#2a2a44"></td>';if(mc){h+='<td style="padding:3px">'+wh(name,mc.id||0)+'</td><td style="text-align:right;color:var(--text-bright)">'+(mc.total||0)+'</td><td style="text-align:right;color:var(--neon-cyan)">'+(myFightMin>0?(mc.total/myFightMin).toFixed(1):'0')+'</td>';}else{h+='<td style="color:#333">\u2014</td><td></td><td></td>';}h+='</tr>';});
+  h+='</tbody></table></div>';}
+
+  // ALIGNED BUFFS/DEBUFFS (full names, table rows)
+  function buffTbl(theirB,myB,tTT,mTT,label){var all=[],s={};(theirB||[]).forEach(function(b){if(!s[b.name]){s[b.name]=true;all.push(b.name);}});(myB||[]).forEach(function(b){if(!s[b.name]){s[b.name]=true;all.push(b.name);}});var tm={};(theirB||[]).forEach(function(b){tm[b.name]=b;});var mm={};(myB||[]).forEach(function(b){mm[b.name]=b;});if(!all.length)return '';var o='<div class="data-card" style="margin-bottom:8px;padding:10px"><div style="font-size:11px;color:var(--neon-cyan);font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">'+label+'</div>';o+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:3px;color:'+col+'">RANK</th><th style="text-align:right;padding:3px;color:'+col+'">UPTIME</th><th style="width:2px"></th><th style="text-align:left;padding:3px;color:var(--neon-cyan)">YOURS</th><th style="text-align:right;padding:3px;color:var(--neon-cyan)">UPTIME</th></tr></thead><tbody>';all.forEach(function(name){var tb=tm[name],mb=mm[name];var tUp=tb&&tTT>0?Math.round((tb.totalUptime||0)/tTT*100):0;var mUp=mb&&mTT>0?Math.round((mb.totalUptime||0)/mTT*100):0;if(tUp<1&&mUp<1)return;var tIco=tb&&tb.icon?'<img src="https://wow.zamimg.com/images/wow/icons/small/'+tb.icon+'.jpg" style="width:16px;height:16px;vertical-align:middle;margin-right:4px" onerror="this.style.display=\'none\'">':'';var mIco=mb&&mb.icon?'<img src="https://wow.zamimg.com/images/wow/icons/small/'+mb.icon+'.jpg" style="width:16px;height:16px;vertical-align:middle;margin-right:4px" onerror="this.style.display=\'none\'">':'';o+='<tr style="border-bottom:1px solid #1a1a34">';if(tb&&tUp>=1){o+='<td style="padding:3px">'+tIco+'<span style="color:var(--text-bright)">'+name+'</span></td><td style="text-align:right;color:'+(tUp>=80?'var(--neon-green)':tUp>=30?'var(--neon-orange)':'var(--text-sub)')+'">'+tUp+'%</td>';}else{o+='<td style="color:#333">\u2014</td><td></td>';}o+='<td style="background:#2a2a44"></td>';if(mb&&mUp>=1){o+='<td style="padding:3px">'+mIco+'<span style="color:var(--text-bright)">'+name+'</span></td><td style="text-align:right;color:'+(mUp>=80?'var(--neon-green)':mUp>=30?'var(--neon-orange)':'var(--text-sub)')+'">'+mUp+'%</td>';}else{o+='<td style="color:#333">\u2014</td><td></td>';}o+='</tr>';});o+='</tbody></table></div>';return o;}
+  h+=buffTbl(data.buffs,my?my.buffs:[],data.totalTime,my?my.totalTime:0,'\u2b06 BUFFS');
+  h+=buffTbl(data.debuffs,my?my.debuffs:[],data.totalTime,my?my.totalTime:0,'\u2b07 DEBUFFS');
+
+  // ALIGNED DAMAGE TAKEN
+  var theirDT=(data.dmgTaken||[]).slice().sort(function(a,b){return(b.total||0)-(a.total||0);});var myDT=(my&&my.dmgTaken)?my.dmgTaken.slice().sort(function(a,b){return(b.total||0)-(a.total||0);}):[]; 
+  var allDT=[],sDT={};theirDT.forEach(function(a){if(!sDT[a.name]){sDT[a.name]=true;allDT.push(a.name);}});myDT.forEach(function(a){if(!sDT[a.name]){sDT[a.name]=true;allDT.push(a.name);}});
+  var tdtM={};theirDT.forEach(function(a){tdtM[a.name]=a;});var mdtM={};myDT.forEach(function(a){mdtM[a.name]=a;});
+  var tTotDT=0;theirDT.forEach(function(e){tTotDT+=e.total||0;});var mTotDT=0;myDT.forEach(function(e){mTotDT+=e.total||0;});
+  if(allDT.length){h+='<div class="data-card" style="margin-bottom:8px;padding:10px"><div style="font-size:11px;color:var(--neon-orange);font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">\ud83d\udee1 DAMAGE TAKEN <span style="color:var(--text-sub);font-size:9px">(Rank '+Math.round(tTotDT/fightSec)+' vs Your '+Math.round(mTotDT/myFightSec)+' DTPS)</span></div>';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:3px;color:'+col+'">RANK SOURCE</th><th style="text-align:right;padding:3px;color:'+col+'">TOTAL</th><th style="text-align:right;padding:3px;color:'+col+'">DTPS</th><th style="width:2px"></th><th style="text-align:left;padding:3px;color:var(--neon-cyan)">YOUR SOURCE</th><th style="text-align:right;padding:3px;color:var(--neon-cyan)">TOTAL</th><th style="text-align:right;padding:3px;color:var(--neon-cyan)">DTPS</th></tr></thead><tbody>';
+  allDT.forEach(function(name){var t=tdtM[name],m=mdtM[name];h+='<tr style="border-bottom:1px solid #1a1a34">';if(t){h+='<td style="padding:3px;color:var(--neon-orange)">'+name+'</td><td style="text-align:right;color:var(--text-bright)">'+fmtK(t.total||0)+'</td><td style="text-align:right;color:var(--text-bright)">'+Math.round((t.total||0)/fightSec)+'</td>';}else{h+='<td style="color:#333">\u2014</td><td></td><td></td>';}h+='<td style="background:#2a2a44"></td>';if(m){h+='<td style="padding:3px;color:var(--neon-orange)">'+name+'</td><td style="text-align:right;color:var(--text-bright)">'+fmtK(m.total||0)+'</td><td style="text-align:right;color:var(--text-bright)">'+Math.round((m.total||0)/myFightSec)+'</td>';}else{h+='<td style="color:#333">\u2014</td><td></td><td></td>';}h+='</tr>';});
+  h+='</tbody></table></div>';}
+
   // DEATHS
-  var theirDeaths=data.deaths?data.deaths.filter(function(d){return d.name===data.playerName;}):[];
-  var myDeaths=(my&&my.deaths)?my.deaths.filter(function(d){return d.name===(my.playerName||'');}):[];
-  if(theirDeaths.length||myDeaths.length){
-    h+='<div style="background:#0a0a12;border:1px solid '+col+';padding:8px"><div style="font-size:10px;color:#aa3344;font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:4px">\u2620 RANK DEATHS: '+theirDeaths.length+'</div>';
-    theirDeaths.forEach(function(d){if(d.killingBlow)h+='<div style="font-size:10px;color:#888">Killed by: <span style="color:#ff6666">'+(d.killingBlow.name||'?')+'</span></div>';});
-    if(!theirDeaths.length)h+='<div style="font-size:10px;color:var(--neon-green)">No deaths \u2714</div>';
-    h+='</div>';
-    h+='<div style="background:#0a0a12;border:1px solid var(--neon-cyan);padding:8px"><div style="font-size:10px;color:#aa3344;font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:4px">\u2620 YOUR DEATHS: '+myDeaths.length+'</div>';
-    myDeaths.forEach(function(d){if(d.killingBlow)h+='<div style="font-size:10px;color:#888">Killed by: <span style="color:#ff6666">'+(d.killingBlow.name||'?')+'</span></div>';});
-    if(!myDeaths.length)h+='<div style="font-size:10px;color:var(--neon-green)">No deaths \u2714</div>';
-    h+='</div>';
-  }
-  
-  h+='</div></div>';
+  var theirDeaths=data.deaths?data.deaths.filter(function(d){return d.name===data.playerName;}):[];var myDeaths=(my&&my.deaths)?my.deaths.filter(function(d){return d.name===(my.playerName||'');}):[];
+  if(theirDeaths.length||myDeaths.length){h+='<div class="data-card" style="margin-bottom:8px;padding:10px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';h+='<div><div style="font-size:11px;color:#aa3344;font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:4px">\u2620 RANK DEATHS: '+theirDeaths.length+'</div>';theirDeaths.forEach(function(d){if(d.killingBlow)h+='<div style="font-size:10px;color:var(--text-sub)">Killed by: <span style="color:#ff6666">'+(d.killingBlow.name||'?')+'</span></div>';});if(!theirDeaths.length)h+='<div style="font-size:10px;color:var(--neon-green)">No deaths \u2714</div>';h+='</div>';h+='<div><div style="font-size:11px;color:#aa3344;font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:4px">\u2620 YOUR DEATHS: '+myDeaths.length+'</div>';myDeaths.forEach(function(d){if(d.killingBlow)h+='<div style="font-size:10px;color:var(--text-sub)">Killed by: <span style="color:#ff6666">'+(d.killingBlow.name||'?')+'</span></div>';});if(!myDeaths.length)h+='<div style="font-size:10px;color:var(--neon-green)">No deaths \u2714</div>';h+='</div></div></div>';}
+
+  h+='</div>';
+  setTimeout(function(){if(typeof $WowheadPower!=='undefined')$WowheadPower.refreshLinks();},200);
   return h;
 }
 
