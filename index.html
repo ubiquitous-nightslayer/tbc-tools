@@ -6159,10 +6159,10 @@ function renderFightDetailHTML(data, entry, playerName, peers, avgDPS, cc) {
     h+='<div id="cmpBtns_'+entry.fightId+'" style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">';
     h+='<button class="btn primary" style="font-size:11px;padding:4px 14px" onclick="autoDetectRankCompare(\''+entry.boss.replace(/'/g,'')+'\',\''+playerName.replace(/'/g,'')+'\','+dps+',\'fightCmp_'+entry.fightId+'\',\'cmpBtns_'+entry.fightId+'\')">\\ud83c\\udfaf FIND MY RANK & COMPARE</button>';
     h+='</div>';
-    h+='<button class="btn" style="font-size:11px;padding:4px 14px;border-color:var(--neon-green);color:var(--neon-green)" onclick="analyzePerformance(\''+playerName.replace(/'/g,'')+'\',\''+entry.boss.replace(/'/g,'')+'\')">\\ud83d\\udd0d WHAT\\u2019S HOLDING ME BACK?</button>';
     h+='</div>';
   }
   h+='</div>';
+  h+='<div style="margin:8px 0"><button class="btn" style="font-size:12px;padding:6px 18px;border-color:var(--neon-green);color:var(--neon-green);font-weight:900;letter-spacing:1px" onclick="analyzePerformance(\''+playerName.replace(/'/g,'')+'\',\''+(entry&&entry.boss?entry.boss.replace(/'/g,''):'')+'\')">\\ud83d\\udd0d WHAT\\u2019S HOLDING ME BACK?</button></div>';
   h+='<div id="fightCmp_'+((entry&&entry.fightId)||'0')+'"></div>';
   
   // ── TABS for sections ──
