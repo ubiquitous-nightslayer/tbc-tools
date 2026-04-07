@@ -6158,6 +6158,7 @@ function renderFightDetailHTML(data, entry, playerName, peers, avgDPS, cc) {
     h+='<div style="margin-left:auto;display:flex;flex-direction:column;gap:3px;align-items:flex-end">';
     h+='<div id="cmpBtns_'+entry.fightId+'" style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">';
     h+='<button class="btn primary" style="font-size:11px;padding:4px 14px" onclick="autoDetectRankCompare(\''+entry.boss.replace(/'/g,'')+'\',\''+playerName.replace(/'/g,'')+'\','+dps+',\'fightCmp_'+entry.fightId+'\',\'cmpBtns_'+entry.fightId+'\')">\\ud83c\\udfaf FIND MY RANK & COMPARE</button>';
+    h+='<button class="btn" style="font-size:11px;padding:4px 14px;border-color:var(--neon-green);color:var(--neon-green)" onclick="analyzePerformance(\''+playerName.replace(/'/g,'')+'\',\''+entry.boss.replace(/'/g,'')+'\')">\\ud83d\\udd0d WHAT\\u2019S HOLDING ME BACK?</button>';
     h+='</div></div>';
   }
   h+='</div>';
@@ -6651,6 +6652,24 @@ function loadRankComparison(bossName, playerName, rankPos, containerId) {
               healing: (r.healing&&r.healing.data&&r.healing.data.entries)||[],
               totalTime: (r.dmgDone&&r.dmgDone.data&&r.dmgDone.data.totalTime)||0
             };
+            // Validate data integrity — skip reports with impossible buff uptimes
+            var fightMs = result.totalTime || 1;
+            var fightS = fightMs / 1000;
+            var hasSuspectData = false;
+            var LUST_CHECK = ['Bloodlust','Heroism'];
+            (result.buffs||[]).forEach(function(b) {
+              LUST_CHECK.forEach(function(ln) {
+                if (b.name && b.name.indexOf(ln) !== -1) {
+                  var upPct = fightMs > 0 ? Math.round((b.totalUptime||0)/fightMs*100) : 0;
+                  var maxPct = fightS > 0 ? Math.round(40/fightS*100) : 100;
+                  if (upPct > maxPct + 10 && fightS > 60) hasSuspectData = true;
+                }
+              });
+            });
+            if (hasSuspectData) {
+              toast('\u26a0 Rank #'+actualRank+' '+rankedName+' has suspect data (impossible Bloodlust uptime) \u2014 skipping');
+              return tryNextInOrder();
+            }
             window._rankCompCache[cacheKey] = result;
             container.innerHTML = renderComparisonHTML(result, actualRank);
             var foundMsg = actualRank === rankPos 
@@ -6694,7 +6713,7 @@ function renderComparisonHTML(data, rankPos) {
   var myDps = my ? Math.round(myTotalDmg/myFightSec) : 0;
   var theirDps = Math.round(totalDmg/fightSec);
   var LUST=['Bloodlust','Heroism','Drums of Battle'];
-  function findLust(buffs,tt){var f=[];(buffs||[]).forEach(function(b){LUST.forEach(function(ln){if(b.name&&b.name.indexOf(ln)!==-1)f.push({name:b.name,up:tt>0?Math.round((b.totalUptime||0)/tt*100):0});});});return f;}
+  function findLust(buffs,tt){var f=[];(buffs||[]).forEach(function(b){LUST.forEach(function(ln){if(b.name&&b.name.indexOf(ln)!==-1){var up=tt>0?Math.round((b.totalUptime||0)/tt*100):0;var fightS=tt/1000;var maxUp=fightS>0?Math.round(40/fightS*100):100;var suspicious=up>maxUp+5&&fightS>60;f.push({name:b.name,up:up,maxUp:maxUp,suspicious:suspicious});}});});return f;}
   var theirLust=findLust(data.buffs,data.totalTime),myLust=my?findLust(my.buffs,my.totalTime):[];
   function fmtTime(s){return Math.floor(s/60)+':'+('0'+Math.round(s%60)).slice(-2);}
   function wh(name,id){if(!id)return '<span style="color:var(--text-bright)">'+name+'</span>';return '<a href="https://tbc.wowhead.com/spell='+id+'" data-wowhead="domain=tbc" style="color:var(--text-bright);text-decoration:none" target="_blank">'+name+'</a>';}
@@ -6709,7 +6728,7 @@ function renderComparisonHTML(data, rankPos) {
   h+='<span style="color:var(--text-bright)">\u23f1 '+fmtTime(fightSec)+'</span><span style="color:var(--text-bright)">DMG '+fmtK(totalDmg)+'</span>';
   if(data.server)h+='<span style="color:var(--text-sub)">'+data.server+'</span>';
   h+='</div>';
-  if(theirLust.length)h+='<div style="margin-top:4px;font-size:11px;color:var(--neon-orange);font-weight:900">\u26a1 '+theirLust.map(function(l){return l.name+' '+l.up+'%';}).join(', ')+'</div>';
+  if(theirLust.length)h+='<div style="margin-top:4px;font-size:11px;color:var(--neon-orange);font-weight:900">\u26a1 '+theirLust.map(function(l){return l.name+' '+l.up+'%'+(l.suspicious?' <span style="color:var(--neon-red)" title="Max possible: '+l.maxUp+'%. WCL data may be inaccurate.">\u26a0 SUSPECT (max ~'+l.maxUp+'%)</span>':'');}).join(', ')+'</div>';
   if(fightSec<90)h+='<div style="margin-top:2px;font-size:10px;color:var(--neon-yellow);font-weight:900">\ud83d\udea8 SPEED KILL</div>';
   h+='</div>';
   h+='<div style="text-align:center;padding:10px;background:#14141e;border:1px solid var(--neon-cyan)">';
@@ -6718,7 +6737,7 @@ function renderComparisonHTML(data, rankPos) {
   h+='<div style="display:flex;justify-content:center;gap:12px;margin-top:6px;font-size:11px;font-family:Share Tech Mono,monospace">';
   h+='<span style="color:var(--text-bright)">\u23f1 '+fmtTime(myFightSec)+'</span><span style="color:var(--text-bright)">DMG '+fmtK(myTotalDmg)+'</span>';
   h+='</div>';
-  if(myLust.length)h+='<div style="margin-top:4px;font-size:11px;color:var(--neon-orange);font-weight:900">\u26a1 '+myLust.map(function(l){return l.name+' '+l.up+'%';}).join(', ')+'</div>';
+  if(myLust.length)h+='<div style="margin-top:4px;font-size:11px;color:var(--neon-orange);font-weight:900">\u26a1 '+myLust.map(function(l){return l.name+' '+l.up+'%'+(l.suspicious?' <span style="color:var(--neon-red)">\u26a0 SUSPECT</span>':'');}).join(', ')+'</div>';
   if(myFightSec<90)h+='<div style="margin-top:2px;font-size:10px;color:var(--neon-yellow);font-weight:900">\ud83d\udea8 SPEED KILL</div>';
   h+='</div></div>';
   // DIFF
@@ -6761,7 +6780,51 @@ function renderComparisonHTML(data, rankPos) {
   h+='</tbody></table></div>';}
 
   // ALIGNED BUFFS/DEBUFFS (full names, table rows)
-  function buffTbl(theirB,myB,tTT,mTT,label){var all=[],s={};(theirB||[]).forEach(function(b){if(!s[b.name]){s[b.name]=true;all.push(b.name);}});(myB||[]).forEach(function(b){if(!s[b.name]){s[b.name]=true;all.push(b.name);}});var tm={};(theirB||[]).forEach(function(b){tm[b.name]=b;});var mm={};(myB||[]).forEach(function(b){mm[b.name]=b;});if(!all.length)return '';var o='<div class="data-card" style="margin-bottom:8px;padding:10px"><div style="font-size:11px;color:var(--neon-cyan);font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">'+label+'</div>';o+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:3px;color:'+col+'">RANK</th><th style="text-align:right;padding:3px;color:'+col+'">UPTIME</th><th style="width:2px"></th><th style="text-align:left;padding:3px;color:var(--neon-cyan)">YOURS</th><th style="text-align:right;padding:3px;color:var(--neon-cyan)">UPTIME</th></tr></thead><tbody>';all.forEach(function(name){var tb=tm[name],mb=mm[name];var tUp=tb&&tTT>0?Math.round((tb.totalUptime||0)/tTT*100):0;var mUp=mb&&mTT>0?Math.round((mb.totalUptime||0)/mTT*100):0;if(tUp<1&&mUp<1)return;var tIco=tb&&tb.icon?'<img src="https://wow.zamimg.com/images/wow/icons/small/'+tb.icon+'.jpg" style="width:16px;height:16px;vertical-align:middle;margin-right:4px" onerror="this.style.display=\'none\'">':'';var mIco=mb&&mb.icon?'<img src="https://wow.zamimg.com/images/wow/icons/small/'+mb.icon+'.jpg" style="width:16px;height:16px;vertical-align:middle;margin-right:4px" onerror="this.style.display=\'none\'">':'';o+='<tr style="border-bottom:1px solid #1a1a34">';if(tb&&tUp>=1){o+='<td style="padding:3px">'+tIco+'<span style="color:var(--text-bright)">'+name+'</span></td><td style="text-align:right;color:'+(tUp>=80?'var(--neon-green)':tUp>=30?'var(--neon-orange)':'var(--text-sub)')+'">'+tUp+'%</td>';}else{o+='<td style="color:#333">\u2014</td><td></td>';}o+='<td style="background:#2a2a44"></td>';if(mb&&mUp>=1){o+='<td style="padding:3px">'+mIco+'<span style="color:var(--text-bright)">'+name+'</span></td><td style="text-align:right;color:'+(mUp>=80?'var(--neon-green)':mUp>=30?'var(--neon-orange)':'var(--text-sub)')+'">'+mUp+'%</td>';}else{o+='<td style="color:#333">\u2014</td><td></td>';}o+='</tr>';});o+='</tbody></table></div>';return o;}
+  // Equivalent buffs that should align on the same row
+  var BUFF_EQUIV = {'Heroism':'Bloodlust','Bloodlust':'Heroism'};
+  function buffTbl(theirB,myB,tTT,mTT,label){
+    var tm={};(theirB||[]).forEach(function(b){tm[b.name]=b;});
+    var mm={};(myB||[]).forEach(function(b){mm[b.name]=b;});
+    // Build aligned pairs: [{tName, mName}]
+    var pairs=[], used={};
+    (theirB||[]).forEach(function(b){
+      if(used[b.name])return; used[b.name]=true;
+      var mName=b.name;
+      if(!mm[mName]&&BUFF_EQUIV[b.name]&&mm[BUFF_EQUIV[b.name]]){mName=BUFF_EQUIV[b.name];used[mName]=true;}
+      else if(!mm[mName]){mName=null;}
+      else{used[mName]=true;}
+      pairs.push({tName:b.name, mName:mName});
+    });
+    (myB||[]).forEach(function(b){
+      if(used[b.name])return; used[b.name]=true;
+      pairs.push({tName:null, mName:b.name});
+    });
+    if(!pairs.length)return '';
+    var o='<div class="data-card" style="margin-bottom:8px;padding:10px"><div style="font-size:11px;color:var(--neon-cyan);font-family:Orbitron,sans-serif;letter-spacing:1px;margin-bottom:6px">'+label+'</div>';
+    o+='<table style="width:100%;border-collapse:collapse;font-size:10px;font-family:Share Tech Mono,monospace"><thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:3px;color:'+col+'">RANK</th><th style="text-align:right;padding:3px;color:'+col+'">UPTIME</th><th style="width:2px"></th><th style="text-align:left;padding:3px;color:var(--neon-cyan)">YOURS</th><th style="text-align:right;padding:3px;color:var(--neon-cyan)">UPTIME</th></tr></thead><tbody>';
+    pairs.forEach(function(p){
+      var tb=p.tName?tm[p.tName]:null, mb=p.mName?mm[p.mName]:null;
+      var tUp=tb&&tTT>0?Math.round((tb.totalUptime||0)/tTT*100):0;
+      var mUp=mb&&mTT>0?Math.round((mb.totalUptime||0)/mTT*100):0;
+      if(tUp<1&&mUp<1)return;
+      // Sanity check: Bloodlust/Heroism max 40s duration
+      var isLust=p.tName&&(p.tName.indexOf('Bloodlust')!==-1||p.tName.indexOf('Heroism')!==-1);
+      var isLust2=p.mName&&(p.mName.indexOf('Bloodlust')!==-1||p.mName.indexOf('Heroism')!==-1);
+      var tSuspect=isLust&&tTT>60000&&tUp>Math.round(40/(tTT/1000)*100)+5;
+      var mSuspect=isLust2&&mTT>60000&&mUp>Math.round(40/(mTT/1000)*100)+5;
+      var tIco=tb&&tb.icon?'<img src="https://wow.zamimg.com/images/wow/icons/small/'+tb.icon+'.jpg" style="width:16px;height:16px;vertical-align:middle;margin-right:4px" onerror="this.style.display=\'none\'">':'';
+      var mIco=mb&&mb.icon?'<img src="https://wow.zamimg.com/images/wow/icons/small/'+mb.icon+'.jpg" style="width:16px;height:16px;vertical-align:middle;margin-right:4px" onerror="this.style.display=\'none\'">':'';
+      o+='<tr style="border-bottom:1px solid #1a1a34">';
+      if(tb&&tUp>=1){o+='<td style="padding:3px">'+tIco+'<span style="color:var(--text-bright)">'+p.tName+'</span></td><td style="text-align:right;color:'+(tUp>=80?'var(--neon-green)':tUp>=30?'var(--neon-orange)':'var(--text-sub)')+'">'+tUp+'%'+(tSuspect?' <span style="color:var(--neon-red);font-size:8px" title="Max possible ~'+Math.round(40/(tTT/1000)*100)+'%">\u26a0</span>':'')+'</td>';}
+      else{o+='<td style="color:#333">\u2014</td><td></td>';}
+      o+='<td style="background:#2a2a44"></td>';
+      if(mb&&mUp>=1){o+='<td style="padding:3px">'+mIco+'<span style="color:var(--text-bright)">'+p.mName+'</span></td><td style="text-align:right;color:'+(mUp>=80?'var(--neon-green)':mUp>=30?'var(--neon-orange)':'var(--text-sub)')+'">'+mUp+'%'+(mSuspect?' <span style="color:var(--neon-red);font-size:8px">\u26a0</span>':'')+'</td>';}
+      else{o+='<td style="color:#333">\u2014</td><td></td>';}
+      o+='</tr>';
+    });
+    o+='</tbody></table></div>';
+    return o;
+  }
   h+=buffTbl(data.buffs,my?my.buffs:[],data.totalTime,my?my.totalTime:0,'\u2b06 BUFFS');
   h+=buffTbl(data.debuffs,my?my.debuffs:[],data.totalTime,my?my.totalTime:0,'\u2b07 DEBUFFS');
 
@@ -6782,6 +6845,203 @@ function renderComparisonHTML(data, rankPos) {
   h+='</div>';
   setTimeout(function(){if(typeof $WowheadPower!=='undefined')$WowheadPower.refreshLinks();},200);
   return h;
+}
+
+// ═══════════════════════════════════════════
+// PERFORMANCE ANALYZER — "WHAT'S HOLDING ME BACK?"
+// ═══════════════════════════════════════════
+function analyzePerformance(playerName, bossName) {
+  var my = null;
+  if (window._lastFightCacheKey && window._fightDetailCache) my = window._fightDetailCache[window._lastFightCacheKey];
+  if (!my) { toast('Load a fight first, then click analyze'); return; }
+  
+  // Collect all cached rank comparisons for this boss
+  var comps = [];
+  Object.keys(window._rankCompCache||{}).forEach(function(key) {
+    if (key.indexOf(bossName) !== -1) comps.push(window._rankCompCache[key]);
+  });
+  if (!comps.length) { toast('Load at least one rank comparison first'); return; }
+  
+  var myFightSec = my.totalTime ? my.totalTime/1000 : 1;
+  var myFightMin = myFightSec / 60;
+  var myTotalDmg = 0; my.dmgDone.forEach(function(e){myTotalDmg+=e.total||0;});
+  var myDps = Math.round(myTotalDmg / myFightSec);
+  
+  // Build maps of my abilities
+  var myDmgMap = {}; my.dmgDone.forEach(function(a){myDmgMap[a.name]=a;});
+  var myCastMap = {}; (my.casts||[]).forEach(function(c){myCastMap[c.name]=c;});
+  var myBuffMap = {}; (my.buffs||[]).forEach(function(b){myBuffMap[b.name]=b;});
+  var myDTTotal = 0; (my.dmgTaken||[]).forEach(function(e){myDTTotal+=e.total||0;});
+  
+  // Aggregate comparison data — average across all loaded comparisons
+  var avgCasts = {}, avgDmg = {}, avgBuffs = {}, avgDps = 0, avgDT = 0, count = comps.length;
+  comps.forEach(function(c) {
+    var cFightSec = c.totalTime ? c.totalTime/1000 : 1;
+    var cFightMin = cFightSec / 60;
+    var cTotalDmg = 0; c.dmgDone.forEach(function(e){cTotalDmg+=e.total||0;});
+    avgDps += Math.round(cTotalDmg / cFightSec);
+    
+    c.dmgDone.forEach(function(a) {
+      if (!avgDmg[a.name]) avgDmg[a.name] = {total:0,dps:0,hits:0,count:0};
+      avgDmg[a.name].total += a.total||0;
+      avgDmg[a.name].dps += Math.round((a.total||0)/cFightSec);
+      var hits = (a.hitCount||0)+(a.critHitCount||0)+(a.tickCount||0)+(a.critTickCount||0);
+      avgDmg[a.name].hits += hits;
+      avgDmg[a.name].count++;
+    });
+    (c.casts||[]).forEach(function(a) {
+      if (!avgCasts[a.name]) avgCasts[a.name] = {total:0,cpm:0,count:0};
+      avgCasts[a.name].total += a.total||0;
+      avgCasts[a.name].cpm += cFightMin > 0 ? a.total/cFightMin : 0;
+      avgCasts[a.name].count++;
+    });
+    (c.buffs||[]).forEach(function(b) {
+      if (!avgBuffs[b.name]) avgBuffs[b.name] = {uptime:0,count:0};
+      avgBuffs[b.name].uptime += c.totalTime > 0 ? Math.round((b.totalUptime||0)/c.totalTime*100) : 0;
+      avgBuffs[b.name].count++;
+    });
+    var cDT = 0; (c.dmgTaken||[]).forEach(function(e){cDT+=e.total||0;});
+    avgDT += Math.round(cDT / cFightSec);
+  });
+  avgDps = Math.round(avgDps / count);
+  avgDT = Math.round(avgDT / count);
+  Object.keys(avgDmg).forEach(function(k){avgDmg[k].dps=Math.round(avgDmg[k].dps/avgDmg[k].count);avgDmg[k].hits=Math.round(avgDmg[k].hits/avgDmg[k].count);});
+  Object.keys(avgCasts).forEach(function(k){avgCasts[k].cpm=+(avgCasts[k].cpm/avgCasts[k].count).toFixed(1);});
+  Object.keys(avgBuffs).forEach(function(k){avgBuffs[k].uptime=Math.round(avgBuffs[k].uptime/avgBuffs[k].count);});
+  
+  // ── ANALYSIS ──
+  var insights = [];
+  var dpsDiff = avgDps - myDps;
+  
+  // 1. Cast frequency gaps
+  Object.keys(avgCasts).forEach(function(name) {
+    var avg = avgCasts[name];
+    var mine = myCastMap[name];
+    var myCpm = mine && myFightMin > 0 ? +(mine.total/myFightMin).toFixed(1) : 0;
+    var diff = avg.cpm - myCpm;
+    if (diff > 0.5 && avg.cpm > 1) {
+      // Estimate DPS impact — use damage per cast from avg data
+      var avgDmgEntry = avgDmg[name];
+      var dpcEst = avgDmgEntry ? Math.round(avgDmgEntry.dps / (avg.cpm / 60)) : 0;
+      var estGain = Math.round(diff / 60 * dpcEst * myFightSec / myFightSec);
+      insights.push({
+        type: 'cast', priority: diff * (avgDmgEntry ? avgDmgEntry.dps : 10),
+        icon: '\u26a1', color: 'var(--neon-cyan)',
+        title: 'Cast '+name+' more often',
+        detail: 'You: '+myCpm+' CPM \u2192 Avg ranked: '+avg.cpm+' CPM (+'+diff.toFixed(1)+' CPM)',
+        tip: 'Cast '+Math.round(diff * myFightMin)+' more times per fight. Each cast \u2248 '+fmtK(dpcEst)+' damage.'
+      });
+    }
+    if (myCpm > 0 && avg.cpm === 0) {
+      // You cast something they don't — might be wasting GCDs
+      insights.push({
+        type: 'wasted', priority: 5,
+        icon: '\u26a0', color: 'var(--neon-orange)',
+        title: 'Ranked players don\u2019t cast '+name,
+        detail: 'You cast it '+myCpm+' CPM. They don\u2019t use it at all.',
+        tip: 'Consider if this GCD could be spent on higher-priority spells.'
+      });
+    }
+  });
+  // Abilities you don't cast but they do
+  Object.keys(avgCasts).forEach(function(name) {
+    if (!myCastMap[name] && avgCasts[name].cpm > 0.5) {
+      insights.push({
+        type: 'missing', priority: avgCasts[name].cpm * 20,
+        icon: '\u274c', color: 'var(--neon-red)',
+        title: 'You never cast '+name,
+        detail: 'Ranked players cast it '+avgCasts[name].cpm+' CPM on average.',
+        tip: 'Add this to your rotation if possible.'
+      });
+    }
+  });
+  
+  // 2. Buff uptime gaps
+  Object.keys(avgBuffs).forEach(function(name) {
+    if (name.indexOf('Bloodlust')!==-1||name.indexOf('Heroism')!==-1) return; // skip lust
+    var avg = avgBuffs[name];
+    var mine = myBuffMap[name];
+    var myUp = mine && my.totalTime > 0 ? Math.round((mine.totalUptime||0)/my.totalTime*100) : 0;
+    var diff = avg.uptime - myUp;
+    if (diff > 15 && avg.uptime > 30) {
+      insights.push({
+        type: 'buff', priority: diff * 2,
+        icon: '\u2b06', color: 'var(--neon-green)',
+        title: name+' uptime low',
+        detail: 'You: '+myUp+'% \u2192 Avg ranked: '+avg.uptime+'% (+'+diff+'%)',
+        tip: diff > 50 ? 'You\u2019re missing this buff entirely \u2014 coordinate with healers/support.' : 'Maintain better uptime on this buff.'
+      });
+    }
+  });
+  
+  // 3. Damage taken
+  var myDtps = Math.round(myDTTotal / myFightSec);
+  if (myDtps > avgDT * 1.3 && myDtps > 50) {
+    insights.push({
+      type: 'survivability', priority: (myDtps - avgDT) * 3,
+      icon: '\ud83d\udee1', color: 'var(--neon-orange)',
+      title: 'Taking too much damage',
+      detail: 'You: '+myDtps+' DTPS \u2192 Avg ranked: '+avgDT+' DTPS ('+(myDtps-avgDT)+' more)',
+      tip: 'Avoid unnecessary damage \u2014 less healing needed means more DPS uptime. Check positioning and mechanic avoidance.'
+    });
+  }
+  
+  // 4. Death check
+  var myDeaths = (my.deaths||[]).filter(function(d){return d.name===(my.playerName||playerName);});
+  if (myDeaths.length) {
+    insights.push({
+      type: 'death', priority: 200,
+      icon: '\u2620', color: 'var(--neon-red)',
+      title: 'You died '+myDeaths.length+' time(s)',
+      detail: myDeaths.map(function(d){return d.killingBlow ? 'Killed by: '+(d.killingBlow.name||'?') : 'Unknown cause';}).join(', '),
+      tip: 'Dead DPS = zero DPS. Survival is the #1 priority.'
+    });
+  }
+  
+  // Sort by priority (highest impact first)
+  insights.sort(function(a,b){return b.priority - a.priority;});
+  
+  // ── RENDER MODAL ──
+  var h = '<div id="analyzeOverlay" style="position:fixed;inset:0;background:rgba(5,5,20,0.95);z-index:300;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 0" onclick="if(event.target===this)this.remove()">';
+  h += '<div style="background:#111118;border:2px solid var(--neon-cyan);width:700px;max-width:95vw;margin:20px auto">';
+  
+  // Header
+  h += '<div style="padding:14px 20px;border-bottom:2px solid #2a2a44;display:flex;justify-content:space-between;align-items:center">';
+  h += '<span style="font-family:Orbitron,sans-serif;font-size:16px;color:var(--neon-cyan);letter-spacing:2px">\ud83d\udd0d WHAT\u2019S HOLDING ME BACK?</span>';
+  h += '<button onclick="document.getElementById(\'analyzeOverlay\').remove()" style="background:none;border:none;color:#ff2244;font-size:22px;cursor:pointer;font-weight:900">\u00d7</button>';
+  h += '</div>';
+  
+  // Summary
+  h += '<div style="padding:12px 20px;background:#0a0a14;border-bottom:1px solid #2a2a44;display:flex;gap:16px;align-items:center">';
+  h += '<div style="text-align:center"><div style="font-size:9px;color:#666;letter-spacing:1px">YOUR DPS</div><div style="font-size:20px;font-weight:900;color:var(--neon-cyan);font-family:Orbitron,sans-serif">'+myDps.toLocaleString()+'</div></div>';
+  h += '<div style="font-size:20px;color:#555">\u2192</div>';
+  h += '<div style="text-align:center"><div style="font-size:9px;color:#666;letter-spacing:1px">AVG RANKED</div><div style="font-size:20px;font-weight:900;color:var(--neon-green);font-family:Orbitron,sans-serif">'+avgDps.toLocaleString()+'</div></div>';
+  h += '<div style="text-align:center;margin-left:auto"><div style="font-size:9px;color:#666;letter-spacing:1px">GAP</div><div style="font-size:20px;font-weight:900;color:var(--neon-red);font-family:Orbitron,sans-serif">+'+dpsDiff.toLocaleString()+'</div></div>';
+  h += '<div style="text-align:center"><div style="font-size:9px;color:#666;letter-spacing:1px">BASED ON</div><div style="font-size:20px;font-weight:900;color:var(--text-bright);font-family:Orbitron,sans-serif">'+count+'</div><div style="font-size:9px;color:#666">reports</div></div>';
+  h += '</div>';
+  
+  // Insights
+  h += '<div style="padding:16px 20px">';
+  if (!insights.length) {
+    h += '<div style="text-align:center;padding:20px;color:var(--neon-green);font-size:14px">\u2705 No significant gaps found \u2014 you\u2019re performing at or near ranked level!</div>';
+  } else {
+    h += '<div style="font-size:10px;color:#666;letter-spacing:1px;margin-bottom:10px">PRIORITIZED IMPROVEMENTS (' + insights.length + ' found)</div>';
+    insights.forEach(function(ins, i) {
+      h += '<div style="background:#0a0a14;border:1px solid #2a2a44;border-left:3px solid '+ins.color+';padding:10px 14px;margin-bottom:6px">';
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
+      h += '<span style="font-size:14px">'+ins.icon+'</span>';
+      h += '<span style="font-size:9px;color:#555;font-family:Share Tech Mono,monospace">#'+(i+1)+'</span>';
+      h += '<span style="font-size:13px;font-weight:900;color:var(--text-bright)">'+ins.title+'</span>';
+      h += '</div>';
+      h += '<div style="font-size:11px;color:var(--text-sub);font-family:Share Tech Mono,monospace;margin-bottom:4px">'+ins.detail+'</div>';
+      h += '<div style="font-size:11px;color:'+ins.color+';font-weight:700">\ud83d\udca1 '+ins.tip+'</div>';
+      h += '</div>';
+    });
+  }
+  h += '</div>';
+  
+  h += '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', h);
 }
 
 function openRankLimitEditor(cls, boss) {
