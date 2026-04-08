@@ -7313,71 +7313,82 @@ function analyzePerformance(playerName, bossName) {
   if (!cls) { Object.keys(assignments).forEach(function(key){var a=assignments[key];if(a.growth)a.growth.forEach(function(g){if(g.player===playerName&&g.cls&&!cls)cls=g.cls;});}); }
   if (!cls) { toast('Player class not found'); return; }
   
-  // Auto-detect spec from fight data if not set
-  if (!spec && my.dmgDone) {
-    var spellNames = {};
-    my.dmgDone.forEach(function(a) { if (a.name) spellNames[a.name] = (a.total||0); });
-    (my.casts||[]).forEach(function(c) { if (c.name) spellNames[c.name] = (spellNames[c.name]||0) + 1; });
-    var SPEC_DETECT = {
-      'Mage': [
-        {spec:'Fire', spells:['Fireball','Scorch','Fire Blast','Combustion','Blast Wave','Dragon\'s Breath','Living Bomb','Ignite']},
-        {spec:'Arcane', spells:['Arcane Blast','Arcane Missiles','Arcane Power','Arcane Explosion']},
-        {spec:'Frost', spells:['Frostbolt','Ice Lance','Cone of Cold','Water Elemental','Summon Water Elemental']}
-      ],
-      'Warrior': [
-        {spec:'Arms', spells:['Mortal Strike','Slam','Sweeping Strikes']},
-        {spec:'Fury', spells:['Bloodthirst','Rampage','Whirlwind']},
-        {spec:'Protection', spells:['Shield Slam','Devastate','Shield Block']}
-      ],
-      'Rogue': [
-        {spec:'Combat', spells:['Sinister Strike','Blade Flurry','Adrenaline Rush']},
-        {spec:'Assassination', spells:['Mutilate','Cold Blood','Envenom']},
-        {spec:'Subtlety', spells:['Hemorrhage','Shadowstep','Premeditation']}
-      ],
-      'Hunter': [
-        {spec:'BeastMastery', spells:['Bestial Wrath','Kill Command','Intimidation']},
-        {spec:'Marksmanship', spells:['Aimed Shot','Trueshot Aura','Silencing Shot']},
-        {spec:'Survival', spells:['Explosive Shot','Raptor Strike','Wyvern Sting']}
-      ],
-      'Warlock': [
-        {spec:'Destruction', spells:['Shadow Bolt','Incinerate','Shadowfury','Conflagrate']},
-        {spec:'Affliction', spells:['Unstable Affliction','Siphon Life','Dark Pact']},
-        {spec:'Demonology', spells:['Felguard','Soul Link','Demonic Knowledge']}
-      ],
-      'Priest': [
-        {spec:'Shadow', spells:['Mind Flay','Vampiric Touch','Shadow Word: Pain','Shadowfiend','Mind Blast']},
-        {spec:'Holy', spells:['Circle of Healing','Prayer of Healing','Lightwell']},
-        {spec:'Discipline', spells:['Power Word: Shield','Pain Suppression','Power Infusion']}
-      ],
-      'Shaman': [
-        {spec:'Elemental', spells:['Lightning Bolt','Chain Lightning','Elemental Mastery']},
-        {spec:'Enhancement', spells:['Stormstrike','Shamanistic Rage','Dual Wield']},
-        {spec:'Restoration', spells:['Chain Heal','Earth Shield','Mana Tide Totem']}
-      ],
-      'Paladin': [
-        {spec:'Retribution', spells:['Crusader Strike','Seal of Command','Sanctity Aura']},
-        {spec:'Protection', spells:['Avenger\'s Shield','Holy Shield','Shield of Righteousness']},
-        {spec:'Holy', spells:['Holy Light','Flash of Light','Holy Shock']}
-      ],
-      'Druid': [
-        {spec:'Balance', spells:['Starfire','Wrath','Moonfire','Insect Swarm']},
-        {spec:'Feral', spells:['Mangle','Shred','Rip','Ferocious Bite']},
-        {spec:'Restoration', spells:['Lifebloom','Swiftmend','Tree of Life']}
-      ]
+  // Auto-detect spec from fight data — checks top damage ability
+  if (!spec) {
+    var topAbilities = [];
+    if (my.dmgDone && my.dmgDone.length) {
+      topAbilities = my.dmgDone.slice().sort(function(a,b){return(b.total||0)-(a.total||0);}).map(function(a){return a.name||'';});
+    }
+    var allAbilities = topAbilities.join('|');
+    // Also check casts
+    if (my.casts && my.casts.length) {
+      my.casts.forEach(function(c){if(c.name) allAbilities += '|' + c.name;});
+    }
+    
+    var SPEC_MAP = {
+      'Mage': {
+        'Fire': /Fireball|Scorch|Fire Blast|Combustion|Blast Wave|Dragon.s Breath|Living Bomb|Ignite/i,
+        'Arcane': /Arcane Blast|Arcane Missiles|Arcane Power/i,
+        'Frost': /Frostbolt|Ice Lance|Summon Water Elemental|Cone of Cold/i
+      },
+      'Warrior': {
+        'Arms': /Mortal Strike|Slam|Sweeping Strikes/i,
+        'Fury': /Bloodthirst|Rampage/i,
+        'Protection': /Shield Slam|Devastate/i
+      },
+      'Rogue': {
+        'Combat': /Sinister Strike|Blade Flurry|Adrenaline Rush/i,
+        'Assassination': /Mutilate|Envenom/i,
+        'Subtlety': /Hemorrhage|Shadowstep/i
+      },
+      'Hunter': {
+        'BeastMastery': /Bestial Wrath|Kill Command/i,
+        'Marksmanship': /Aimed Shot|Silencing Shot/i,
+        'Survival': /Explosive Shot|Wyvern Sting/i
+      },
+      'Warlock': {
+        'Destruction': /Incinerate|Shadowfury|Conflagrate/i,
+        'Affliction': /Unstable Affliction|Siphon Life/i,
+        'Demonology': /Felguard|Soul Link|Demonic Knowledge/i
+      },
+      'Priest': {
+        'Shadow': /Mind Flay|Vampiric Touch|Shadow Word: Pain/i,
+        'Holy': /Circle of Healing|Prayer of Healing/i,
+        'Discipline': /Pain Suppression|Penance/i
+      },
+      'Shaman': {
+        'Elemental': /Lightning Bolt|Chain Lightning|Elemental Mastery/i,
+        'Enhancement': /Stormstrike|Shamanistic Rage/i,
+        'Restoration': /Chain Heal|Mana Tide/i
+      },
+      'Paladin': {
+        'Retribution': /Crusader Strike|Seal of Command/i,
+        'Protection': /Avenger.s Shield|Holy Shield/i,
+        'Holy': /Holy Light|Flash of Light|Holy Shock/i
+      },
+      'Druid': {
+        'Balance': /Starfire|Wrath|Insect Swarm/i,
+        'Feral': /Mangle|Shred|Rip|Ferocious Bite/i,
+        'Restoration': /Lifebloom|Swiftmend|Tree of Life/i
+      }
     };
-    var specScores = {};
-    if (SPEC_DETECT[cls]) {
-      SPEC_DETECT[cls].forEach(function(sd) {
-        var score = 0;
-        sd.spells.forEach(function(sp) { if (spellNames[sp]) score += spellNames[sp]; });
-        specScores[sd.spec] = score;
+    
+    if (SPEC_MAP[cls]) {
+      var bestSpec = '', bestHits = 0;
+      Object.keys(SPEC_MAP[cls]).forEach(function(specName) {
+        var regex = SPEC_MAP[cls][specName];
+        var hits = (allAbilities.match(regex) || []).length;
+        // Also weight by top damage position
+        topAbilities.forEach(function(ab, idx) {
+          if (regex.test(ab)) hits += (10 - Math.min(idx, 9)); // top abilities score higher
+        });
+        if (hits > bestHits) { bestHits = hits; bestSpec = specName; }
       });
-      var bestSpec = '', bestScore = 0;
-      Object.keys(specScores).forEach(function(s) { if (specScores[s] > bestScore) { bestScore = specScores[s]; bestSpec = s; } });
       if (bestSpec) spec = bestSpec;
     }
-    if (spec) toast('\ud83c\udfaf Detected spec: ' + spec + ' ' + cls);
+    console.log('[ANALYZER] Detected spec:', spec, 'from abilities:', topAbilities.slice(0,5).join(', '));
   }
+  if (spec) toast('\ud83c\udfaf Analyzing as ' + spec + ' ' + cls);
 
   var myFS = my.totalTime ? my.totalTime/1000 : 1, myFM = myFS/60;
   var myTD = 0; my.dmgDone.forEach(function(e){myTD+=e.total||0;});
@@ -7388,7 +7399,7 @@ function analyzePerformance(playerName, bossName) {
   var h = '<div id="analyzeOverlay" style="position:fixed;inset:0;background:rgba(5,5,20,0.95);z-index:300;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">';
   h += '<div style="background:#111118;border:2px solid var(--neon-cyan);width:500px;max-width:95vw;padding:40px;text-align:center">';
   h += '<div style="font-family:Orbitron,sans-serif;font-size:16px;color:var(--neon-cyan);letter-spacing:2px;margin-bottom:16px">\ud83d\udd0d ANALYZING...</div>';
-  h += '<div id="analyzeProgress" style="font-size:13px;color:var(--text-sub);font-family:Share Tech Mono,monospace">Finding your rank among all '+cls+' players...</div>';
+  h += '<div id="analyzeProgress" style="font-size:13px;color:var(--text-sub);font-family:Share Tech Mono,monospace">Finding rank among '+spec+' '+cls+' players...</div>';
   h += '<div style="margin-top:16px;width:100%;height:4px;background:#2a2a44"><div id="analyzeBar" style="height:100%;background:var(--neon-cyan);width:5%;transition:width 0.3s"></div></div>';
   h += '</div></div>';
   document.body.insertAdjacentHTML('beforeend', h);
@@ -7615,7 +7626,7 @@ function analyzePerformance(playerName, bossName) {
         rh += '<div style="padding:10px 20px;background:#0a0a14;border-bottom:1px solid #2a2a44;display:flex;gap:16px;align-items:center;font-family:Share Tech Mono,monospace;font-size:12px;flex-wrap:wrap">';
         rh += '<span style="color:var(--neon-cyan)">YOU: <b>'+myDps.toLocaleString()+'</b> DPS (rank ~#'+myRank+')</span>';
         rh += '<span style="color:var(--text-sub)">\u2192</span>';
-        rh += '<span style="color:var(--neon-green)">TOP 100 AVG: <b>'+avgAboveDps.toLocaleString()+'</b> DPS</span>';
+        rh += '<span style="color:var(--neon-green)">TOP 100 '+spec.toUpperCase()+' '+cls.toUpperCase()+' AVG: <b>'+avgAboveDps.toLocaleString()+'</b></span>';
         rh += '<span style="color:var(--neon-orange)">#1: <b>'+topDps.toLocaleString()+'</b> DPS</span>';
         rh += '<span style="color:var(--neon-red)">GAP: <b>'+gap.toLocaleString()+'</b></span>';
         rh += '<span style="color:var(--neon-orange)">RECOVERABLE: <b>~'+totalEstGain.toLocaleString()+'</b></span>';
