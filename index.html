@@ -723,9 +723,46 @@ function applyGuildConfig(guild) {
   cfg.wclGuildId = guild.wcl_guild_id || cfg.wclGuildId;
   cfg.gistId = guild.gist_id || cfg.gistId;
   cfg.gistToken = guild.gist_token || cfg.gistToken;
-  if (guild.config) Object.keys(guild.config).forEach(function(k) { if (!cfg[k] && guild.config[k]) cfg[k] = guild.config[k]; });
+  // Restore full config object (includes wclToken, etc)
+  if (guild.config) {
+    Object.keys(guild.config).forEach(function(k) {
+      if (guild.config[k] !== undefined && guild.config[k] !== '') cfg[k] = guild.config[k];
+    });
+  }
   saveGuildConfig(cfg);
   if (typeof updateGuildDisplay === 'function') updateGuildDisplay();
+  
+  // Auto-generate WCL token if we have creds but no token
+  if (cfg.wclClientId && cfg.wclClientSecret && !cfg.wclToken) {
+    fetch('https://www.warcraftlogs.com/oauth/token', {
+      method: 'POST',
+      headers: { 'Authorization': 'Basic ' + btoa(cfg.wclClientId + ':' + cfg.wclClientSecret), 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'grant_type=client_credentials'
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      if (d.access_token) { cfg.wclToken = d.access_token; saveGuildConfig(cfg); toast('\u2705 WCL token restored'); }
+    }).catch(function(){});
+  }
+  
+  // Auto-load assignments from Gist if we have gist credentials
+  if (cfg.gistId && cfg.gistToken) {
+    fetch('https://api.github.com/gists/' + cfg.gistId, { headers: { 'Authorization': 'token ' + cfg.gistToken } })
+    .then(function(r) { return r.json(); })
+    .then(function(g) {
+      if (g.files && g.files['assignments.json']) {
+        var data = JSON.parse(g.files['assignments.json'].content);
+        if (data.assignments) {
+          Object.keys(data.assignments).forEach(function(k) { assignments[k] = data.assignments[k]; });
+          quickSave();
+          if (typeof renderBoss === 'function') renderBoss();
+          toast('\u2705 Assignments restored from cloud');
+        }
+        if (data.roster && data.roster.length) {
+          GUILD_ROSTER.length = 0;
+          data.roster.forEach(function(r) { GUILD_ROSTER.push(r); });
+        }
+      }
+    }).catch(function(e) { console.log('Gist restore error:', e); });
+  }
 }
 
 // ── INVITE CODES ──
@@ -3428,6 +3465,13 @@ function spFinish() {
   });
   
   // 5. Finish
+  // Save to Supabase DB if logged in
+  chain = chain.then(function() {
+    if (_sb && _guild) {
+      return saveGuildToDB().then(function() { steps.push('\u2705 Saved to database'); }).catch(function(){});
+    }
+  });
+  
   chain.then(function() {
     setTimeout(function() {
       if (steps.length) {
@@ -7821,9 +7865,14 @@ function openKeyModal(mode) {
 function closeModal() { document.getElementById('keyModal').classList.remove('open'); }
 document.getElementById('keyModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
 
+var _dbSaveTimer = null;
 function quickSave() {
   localStorage.setItem('ubiq_tbc_quick', JSON.stringify(assignments));
-  toast('Quick saved');
+  // Debounced save to Supabase (waits 5s after last quickSave to avoid spamming)
+  if (_sb && _guild) {
+    clearTimeout(_dbSaveTimer);
+    _dbSaveTimer = setTimeout(function() { saveGuildToDB().catch(function(){}); }, 5000);
+  }
 }
 
 function quickLoad() {
