@@ -5147,6 +5147,12 @@ function renderAttendanceView(container) {
   h += '<div class="stat-box"><div class="stat-value">' + dates.length + '</div><div class="stat-label">RAID NIGHTS</div></div>';
   h += '<div class="stat-box"><div class="stat-value">' + avgAttendance + '%</div><div class="stat-label">AVG ATTENDANCE</div></div>';
   h += '</div>';
+  
+  // ADD UNLOGGED RAID NIGHT button
+  h += '<div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+  h += '<button class="btn" style="font-size:12px;padding:6px 16px;border-color:var(--neon-green);color:var(--neon-green)" onclick="addUnloggedRaidNight()">+ ADD UNLOGGED RAID NIGHT</button>';
+  h += '<span style="font-size:11px;color:#555;font-family:Share Tech Mono,monospace">For raids that weren\u2019t combat logged (2nd Kara group, etc)</span>';
+  h += '</div>';
 
   // Per-player breakdown
   h += '<div class="data-card">';
@@ -7298,219 +7304,270 @@ function analyzePerformance(playerName, bossName) {
   var my = null;
   if (window._lastFightCacheKey && window._fightDetailCache) my = window._fightDetailCache[window._lastFightCacheKey];
   if (!my) { toast('Load a fight first, then click analyze'); return; }
-  var comps = [];
-  Object.keys(window._rankCompCache||{}).forEach(function(key) {
-    if (key.indexOf(bossName) !== -1) comps.push(window._rankCompCache[key]);
-  });
-  if (!comps.length) { toast('Load rank comparisons first (click FIND MY RANK, then click rank buttons)'); return; }
+  var token = getWclToken();
+  if (!token) { toast('Set up WCL credentials first'); return; }
+  
+  var pR = GUILD_ROSTER.find(function(r){return r.name===playerName;});
+  var cls = pR ? pR.cls : '';
+  var spec = pR ? (pR.spec||'') : '';
+  if (!cls) { Object.keys(assignments).forEach(function(key){var a=assignments[key];if(a.growth)a.growth.forEach(function(g){if(g.player===playerName&&g.cls&&!cls)cls=g.cls;});}); }
+  if (!cls) { toast('Player class not found'); return; }
 
   var myFS = my.totalTime ? my.totalTime/1000 : 1, myFM = myFS/60;
   var myTD = 0; my.dmgDone.forEach(function(e){myTD+=e.total||0;});
   var myDps = Math.round(myTD/myFS);
-  var myDmgMap = {}; my.dmgDone.forEach(function(a){myDmgMap[a.name]=a;});
-  var myCastMap = {}; (my.casts||[]).forEach(function(c){myCastMap[c.name]=c;});
-  var myBuffMap = {}; (my.buffs||[]).forEach(function(b){myBuffMap[b.name]=b;});
-  var myDTT = 0; (my.dmgTaken||[]).forEach(function(e){myDTT+=e.total||0;});
-  var myDeaths = (my.deaths||[]).filter(function(d){return d.name===(my.playerName||playerName);});
+  var myKillTime = Math.round(myFS);
 
-  // Aggregate comparisons
-  var N = comps.length, avgDps = 0;
-  var aDmg = {}, aCast = {}, aBuff = {}, aDT = 0;
-  comps.forEach(function(c) {
-    var cFS = c.totalTime ? c.totalTime/1000 : 1, cFM = cFS/60;
-    var cTD = 0; c.dmgDone.forEach(function(e){cTD+=e.total||0;});
-    avgDps += Math.round(cTD/cFS);
-    c.dmgDone.forEach(function(a) {
-      if (!aDmg[a.name]) aDmg[a.name] = {totalDmg:0,dps:0,hits:0,crits:0,n:0};
-      aDmg[a.name].totalDmg += a.total||0;
-      aDmg[a.name].dps += Math.round((a.total||0)/cFS);
-      var h = (a.hitCount||0)+(a.critHitCount||0)+(a.tickCount||0)+(a.critTickCount||0);
-      aDmg[a.name].hits += h;
-      aDmg[a.name].crits += (a.critHitCount||0)+(a.critTickCount||0);
-      aDmg[a.name].n++;
-    });
-    (c.casts||[]).forEach(function(a) {
-      if (!aCast[a.name]) aCast[a.name] = {total:0,cpm:0,n:0};
-      aCast[a.name].total += a.total||0;
-      aCast[a.name].cpm += cFM > 0 ? a.total/cFM : 0;
-      aCast[a.name].n++;
-    });
-    (c.buffs||[]).forEach(function(b) {
-      if (!aBuff[b.name]) aBuff[b.name] = {up:0,n:0};
-      aBuff[b.name].up += c.totalTime > 0 ? Math.round((b.totalUptime||0)/c.totalTime*100) : 0;
-      aBuff[b.name].n++;
-    });
-    var cDT = 0; (c.dmgTaken||[]).forEach(function(e){cDT+=e.total||0;});
-    aDT += Math.round(cDT/cFS);
-  });
-  avgDps = Math.round(avgDps/N); aDT = Math.round(aDT/N);
-  Object.keys(aDmg).forEach(function(k){var d=aDmg[k];d.dps=Math.round(d.dps/d.n);d.hits=Math.round(d.hits/d.n);d.crits=Math.round(d.crits/d.n);d.totalDmg=Math.round(d.totalDmg/d.n);});
-  Object.keys(aCast).forEach(function(k){aCast[k].cpm=+(aCast[k].cpm/aCast[k].n).toFixed(1);aCast[k].total=Math.round(aCast[k].total/aCast[k].n);});
-  Object.keys(aBuff).forEach(function(k){aBuff[k].up=Math.round(aBuff[k].up/aBuff[k].n);});
-
-  var gap = avgDps - myDps;
-  var insights = [];
-
-  // ── CAST FREQUENCY ANALYSIS ──
-  Object.keys(aCast).forEach(function(name) {
-    var avg = aCast[name];
-    var mine = myCastMap[name];
-    var myCpm = mine && myFM > 0 ? +(mine.total/myFM).toFixed(1) : 0;
-    var myCasts = mine ? mine.total : 0;
-    var diff = avg.cpm - myCpm;
-    if (diff > 0.3 && avg.cpm > 0.5) {
-      var avgD = aDmg[name];
-      var dpc = avgD && avgD.hits > 0 ? Math.round(avgD.totalDmg / avgD.hits) : 0;
-      var missedCasts = Math.round(diff * myFM);
-      var estDpsGain = myFS > 0 ? Math.round(missedCasts * dpc / myFS) : 0;
-      insights.push({ priority: estDpsGain, estGain: estDpsGain, html:
-        '<td style="color:var(--neon-cyan)">\u26a1 Cast Frequency</td>'+
-        '<td><span style="color:var(--text-bright)">'+name+'</span></td>'+
-        '<td>You cast <b>'+myCasts+'</b> times ('+myCpm+' CPM). Ranked avg: <b>'+avg.total+'</b> times ('+avg.cpm+' CPM). You\u2019re missing <b style="color:var(--neon-orange)">'+missedCasts+' casts</b> per fight.'+(dpc>0?' Each cast \u2248 <b>'+fmtK(dpc)+'</b> damage.':'')+'</td>'+
-        '<td style="color:var(--neon-green);font-weight:900;text-align:right">+'+estDpsGain+'</td>'
-      });
-    }
-  });
-  // Missing abilities
-  Object.keys(aCast).forEach(function(name) {
-    if (!myCastMap[name] && aCast[name].cpm > 0.3) {
-      var avgD = aDmg[name];
-      var estDmg = avgD ? avgD.dps : 0;
-      insights.push({ priority: estDmg, estGain: estDmg, html:
-        '<td style="color:var(--neon-red)">\u274c Missing Spell</td>'+
-        '<td><span style="color:var(--text-bright)">'+name+'</span></td>'+
-        '<td>You <b>never cast</b> this spell. Ranked players cast it <b>'+aCast[name].total+'</b> times per fight ('+aCast[name].cpm+' CPM).'+(avgD?' It does <b>'+fmtK(avgD.totalDmg)+'</b> total damage for them.':'')+'</td>'+
-        '<td style="color:var(--neon-green);font-weight:900;text-align:right">+'+estDmg+'</td>'
-      });
-    }
-  });
-  // Wasted GCDs
-  Object.keys(myCastMap).forEach(function(name) {
-    if (!aCast[name] && myCastMap[name].total > 1) {
-      var myCasts = myCastMap[name].total;
-      var myD = myDmgMap[name];
-      var wastedDmg = myD ? myD.total||0 : 0;
-      insights.push({ priority: 15, estGain: 0, html:
-        '<td style="color:var(--neon-orange)">\u26a0 Wasted GCDs</td>'+
-        '<td><span style="color:var(--text-bright)">'+name+'</span></td>'+
-        '<td>You cast this <b>'+myCasts+'</b> times'+(wastedDmg>0?' for <b>'+fmtK(wastedDmg)+'</b> damage':'')+', but <b>no ranked player uses it</b>. These GCDs could be spent on higher-priority spells instead.</td>'+
-        '<td style="color:#888;text-align:right">\u2014</td>'
-      });
-    }
-  });
-
-  // ── DAMAGE PER ABILITY ──
-  Object.keys(aDmg).forEach(function(name) {
-    var avg = aDmg[name];
-    var mine = myDmgMap[name];
-    if (!mine || !avg) return;
-    var myAbDps = Math.round((mine.total||0)/myFS);
-    var dpsDiff = avg.dps - myAbDps;
-    if (dpsDiff > 20 && avg.dps > 50) {
-      var myHits = (mine.hitCount||0)+(mine.critHitCount||0)+(mine.tickCount||0)+(mine.critTickCount||0);
-      var myCrits = (mine.critHitCount||0)+(mine.critTickCount||0);
-      var myCritPct = myHits > 0 ? Math.round(myCrits/myHits*100) : 0;
-      var avgCritPct = avg.hits > 0 ? Math.round(avg.crits/avg.hits*100) : 0;
-      var hitDiff = avg.hits - myHits;
-      var critDiff = avgCritPct - myCritPct;
-      var detail = 'Your '+name+': <b>'+myAbDps+'</b> DPS ('+fmtK(mine.total||0)+' total, '+myHits+' hits, '+myCritPct+'% crit). Ranked avg: <b>'+avg.dps+'</b> DPS ('+fmtK(avg.totalDmg)+' total, '+avg.hits+' hits, '+avgCritPct+'% crit).';
-      if (hitDiff > 2) detail += ' They land <b style="color:var(--neon-orange)">'+hitDiff+' more hits</b>.';
-      if (critDiff > 5) detail += ' Their crit rate is <b style="color:var(--neon-orange)">'+critDiff+'% higher</b>.';
-      // Only add if not already covered by cast frequency
-      if (!aCast[name] || !myCastMap[name] || Math.abs(aCast[name].cpm - (myCastMap[name].total/myFM)) < 0.5) {
-        insights.push({ priority: dpsDiff, estGain: dpsDiff, html:
-          '<td style="color:var(--neon-purple)">\u2694 Damage Gap</td>'+
-          '<td><span style="color:var(--text-bright)">'+name+'</span></td>'+
-          '<td>'+detail+'</td>'+
-          '<td style="color:var(--neon-green);font-weight:900;text-align:right">+'+dpsDiff+'</td>'
-        });
-      }
-    }
-  });
-
-  // ── BUFF UPTIME (only actionable buffs the player controls) ──
-  var RAID_BUFFS_SKIP = ['Bloodlust','Heroism','Greater Blessing','Prayer of','Gift of the Wild','Mark of the Wild','Arcane Brilliance','Arcane Intellect','Battle Shout','Commanding Shout','Ferocious Inspiration','Blessing of','Leader of the Pack','Moonkin Aura','Totem','Devotion Aura','Retribution Aura','Concentration Aura','Sanctity Aura','Shadow Resistance Aura','Fire Resistance Aura','Frost Resistance Aura','Trueshot Aura','Inspiration','Power Infusion','Innervate','Lifebloom','Renew','Rejuvenation','Regrowth','Prayer of Mending','Earth Shield','Power Word: Shield','Battle Squawk','Drums of','Shadow Word:','Vampiric','Grace of Air','Windfury','Wrath of Air','Mana Spring','Strength of Earth','Brilliance Aura','Improved','Braided Eternium','Noggenfogger','Nightmare Seed','Lesser Spell Blas','Fungal Frenzy','Spirit Tap'];
-  Object.keys(aBuff).forEach(function(name) {
-    var skip = false;
-    RAID_BUFFS_SKIP.forEach(function(pat) { if (name.indexOf(pat) !== -1) skip = true; });
-    if (skip) return;
-    var avg = aBuff[name];
-    var mine = myBuffMap[name];
-    var myUp = mine && my.totalTime > 0 ? Math.round((mine.totalUptime||0)/my.totalTime*100) : 0;
-    var diff = avg.up - myUp;
-    if (diff > 15 && avg.up > 25) {
-      var est = Math.round(diff * 0.5);
-      var isConsumable = name.indexOf('Flask')!==-1||name.indexOf('Elixir')!==-1||name.indexOf('Well Fed')!==-1||name.indexOf('Oil')!==-1||name.indexOf('Potion')!==-1||name.indexOf('Scroll')!==-1||name.indexOf('Destruction')!==-1;
-      var tip = myUp===0 ? (isConsumable ? 'You\u2019re not using this consumable. Buy and use it before every pull.' : 'Completely missing \u2014 check if this is a self-buff or trinket proc you should have.') : 'Maintain better uptime.';
-      insights.push({ priority: diff, estGain: est, html:
-        '<td style="color:var(--neon-green)">\u2b06 '+(isConsumable?'Consumable':'Buff')+'</td>'+
-        '<td><span style="color:var(--text-bright)">'+name+'</span></td>'+
-        '<td>Your uptime: <b>'+myUp+'%</b>. Ranked avg: <b>'+avg.up+'%</b> (+'+diff+'%). '+tip+'</td>'+
-        '<td style="color:var(--neon-green);font-weight:900;text-align:right">~+'+est+'</td>'
-      });
-    }
-  });
-
-  // ── DAMAGE TAKEN ──
-  var myDtps = Math.round(myDTT/myFS);
-  if (myDtps > aDT * 1.25 && myDtps > 50) {
-    var excess = myDtps - aDT;
-    var topSources = (my.dmgTaken||[]).slice().sort(function(a,b){return(b.total||0)-(a.total||0);}).slice(0,3);
-    var srcText = topSources.map(function(s){return s.name+' ('+fmtK(s.total||0)+')';}).join(', ');
-    insights.push({ priority: excess * 2, estGain: 0, html:
-      '<td style="color:var(--neon-orange)">\ud83d\udee1 Damage Taken</td>'+
-      '<td><span style="color:var(--text-bright)">Survivability</span></td>'+
-      '<td>You take <b>'+myDtps+' DTPS</b> vs ranked avg <b>'+aDT+' DTPS</b> \u2014 that\u2019s <b style="color:var(--neon-red)">'+excess+' more DTPS</b>. Top sources: '+srcText+'. More damage taken = more healer attention on you = less raid DPS. Improve positioning and mechanic avoidance.</td>'+
-      '<td style="color:#888;text-align:right">survival</td>'
-    });
-  }
-
-  // ── DEATHS ──
-  if (myDeaths.length) {
-    var causes = myDeaths.map(function(d){return d.killingBlow ? d.killingBlow.name||'Unknown' : 'Unknown';}).join(', ');
-    insights.push({ priority: 500, estGain: 0, html:
-      '<td style="color:var(--neon-red)">\u2620 Deaths</td>'+
-      '<td><span style="color:var(--text-bright)">You died '+myDeaths.length+'x</span></td>'+
-      '<td>Killed by: <b style="color:var(--neon-red)">'+causes+'</b>. Dead DPS = zero DPS. Every second dead is lost damage. This is the <b>#1 priority</b> to fix before optimizing rotation.</td>'+
-      '<td style="color:var(--neon-red);font-weight:900;text-align:right">CRITICAL</td>'
-    });
-  }
-
-  insights.sort(function(a,b){return b.priority - a.priority;});
-  var totalEstGain = 0; insights.forEach(function(i){totalEstGain+=i.estGain||0;});
-
-  // ── RENDER ──
-  var h = '<div id="analyzeOverlay" style="position:fixed;inset:0;background:rgba(5,5,20,0.95);z-index:300;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 0" onclick="if(event.target===this)this.remove()">';
-  h += '<div style="background:#111118;border:2px solid var(--neon-cyan);width:900px;max-width:95vw;margin:20px auto">';
-  // Header
-  h += '<div style="padding:12px 20px;border-bottom:2px solid #2a2a44;display:flex;justify-content:space-between;align-items:center">';
-  h += '<span style="font-family:Orbitron,sans-serif;font-size:14px;color:var(--neon-cyan);letter-spacing:2px">\ud83d\udd0d WHAT\u2019S HOLDING ME BACK?</span>';
-  h += '<button onclick="document.getElementById(\'analyzeOverlay\').remove()" style="background:none;border:none;color:#ff2244;font-size:22px;cursor:pointer;font-weight:900">\u00d7</button>';
-  h += '</div>';
-  // Summary bar
-  h += '<div style="padding:10px 20px;background:#0a0a14;border-bottom:1px solid #2a2a44;display:flex;gap:20px;align-items:center;font-family:Share Tech Mono,monospace;font-size:12px">';
-  h += '<span style="color:var(--neon-cyan)">YOU: <b>'+myDps.toLocaleString()+'</b> DPS</span>';
-  h += '<span style="color:var(--text-sub)">\u2192</span>';
-  h += '<span style="color:var(--neon-green)">RANKED AVG: <b>'+avgDps.toLocaleString()+'</b> DPS</span>';
-  h += '<span style="color:var(--neon-red)">GAP: <b>'+gap.toLocaleString()+'</b> DPS</span>';
-  h += '<span style="color:var(--neon-orange)">EST. RECOVERABLE: <b>~'+totalEstGain.toLocaleString()+'</b> DPS</span>';
-  h += '<span style="color:#555">FROM <b>'+N+'</b> REPORTS</span>';
-  h += '</div>';
-  // Table
-  h += '<div style="padding:12px 16px;max-height:70vh;overflow-y:auto">';
-  if (!insights.length) {
-    h += '<div style="text-align:center;padding:20px;color:var(--neon-green);font-size:13px">\u2705 No significant gaps \u2014 you\u2019re performing at ranked level.</div>';
-  } else {
-    h += '<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Share Tech Mono,monospace">';
-    h += '<thead><tr style="color:#666;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:4px;width:110px">TYPE</th><th style="text-align:left;padding:4px;width:120px">ABILITY</th><th style="text-align:left;padding:4px">ANALYSIS</th><th style="text-align:right;padding:4px;width:70px">EST DPS</th></tr></thead>';
-    h += '<tbody>';
-    insights.forEach(function(ins, i) {
-      h += '<tr style="border-bottom:1px solid #1a1a34;'+(i===0?'background:rgba(255,34,68,0.05)':'')+'">'+ins.html+'</tr>';
-    });
-    h += '</tbody></table>';
-  }
-  h += '</div></div></div>';
+  // Show loading overlay
+  var h = '<div id="analyzeOverlay" style="position:fixed;inset:0;background:rgba(5,5,20,0.95);z-index:300;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">';
+  h += '<div style="background:#111118;border:2px solid var(--neon-cyan);width:500px;max-width:95vw;padding:40px;text-align:center">';
+  h += '<div style="font-family:Orbitron,sans-serif;font-size:16px;color:var(--neon-cyan);letter-spacing:2px;margin-bottom:16px">\ud83d\udd0d ANALYZING...</div>';
+  h += '<div id="analyzeProgress" style="font-size:13px;color:var(--text-sub);font-family:Share Tech Mono,monospace">Finding your rank among all '+cls+' players...</div>';
+  h += '<div style="margin-top:16px;width:100%;height:4px;background:#2a2a44"><div id="analyzeBar" style="height:100%;background:var(--neon-cyan);width:5%;transition:width 0.3s"></div></div>';
+  h += '</div></div>';
   document.body.insertAdjacentHTML('beforeend', h);
+
+  var prog = function(msg, pct) {
+    var el = document.getElementById('analyzeProgress');
+    var bar = document.getElementById('analyzeBar');
+    if (el) el.textContent = msg;
+    if (bar) bar.style.width = pct + '%';
+  };
+
+  var bossClean = bossName.replace(/ \d+$/, '');
+  var wclSpec = (spec||'').replace('Feral (Cat)','Feral').replace('Feral (Bear)','Guardian').replace('Beast Mastery','BeastMastery');
+  var specFilter = wclSpec ? ', specName:"'+wclSpec+'"' : '';
+
+  // Step 1: Find encounter
+  var zoneIds = [1007,1008,1009,1010,1011,1012,1013,1014,1015];
+  var zoneQ = zoneIds.map(function(z){return 'z'+z+': zone(id:'+z+') { encounters { id name } }';}).join(' ');
+
+  wclQuery('{ worldData { '+zoneQ+' } }').then(function(zd) {
+    if (!zd||!zd.worldData) throw new Error('Zone query failed');
+    var encId = null;
+    Object.values(zd.worldData).forEach(function(zone) {
+      if (zone&&zone.encounters) zone.encounters.forEach(function(enc) {
+        if (enc.name.toLowerCase()===bossClean.toLowerCase()) encId=enc.id;
+      });
+    });
+    if (!encId) throw new Error('Encounter not found: '+bossClean);
+
+    prog('Querying rankings for '+cls+'...', 15);
+
+    // Step 2: Get rankings — pages 1-10 (up to 1000 players)
+    var scanPages = [];
+    for (var p=1; p<=10; p++) scanPages.push(p);
+    var scanQ = scanPages.map(function(p){return 'p'+p+': characterRankings(className:"'+cls+'"'+specFilter+', metric:dps, page:'+p+')';}).join(' ');
+
+    return wclQuery('{ worldData { encounter(id:'+encId+') { '+scanQ+' } } }').then(function(rd) {
+      if (!rd||!rd.worldData||!rd.worldData.encounter) throw new Error('No rankings');
+      var enc = rd.worldData.encounter;
+
+      var allRanked = [];
+      scanPages.forEach(function(pg) {
+        var pd = enc['p'+pg];
+        if (pd && pd.rankings) pd.rankings.forEach(function(r, i) {
+          allRanked.push({
+            rank: (pg-1)*100+i+1, dps: Math.round(r.amount||0),
+            duration: r.duration ? Math.round(r.duration/1000) : 0,
+            name: r.name||'', server: r.server?r.server.name:'',
+            reportCode: r.report?r.report.code:'', fightId: r.report?r.report.fightID:0
+          });
+        });
+      });
+      allRanked.sort(function(a,b){return b.dps-a.dps;});
+
+      // Find player rank
+      var playerRank = allRanked.length;
+      for (var i=0; i<allRanked.length; i++) {
+        if (myDps >= allRanked[i].dps) { playerRank = allRanked[i].rank; break; }
+      }
+
+      // Get 100 players above this rank
+      var above = allRanked.filter(function(r){ return r.rank < playerRank && r.rank >= Math.max(1, playerRank - 100); });
+      if (above.length < 10) above = allRanked.filter(function(r){ return r.dps > myDps; }).slice(-100);
+
+      // Filter to similar kill time (±25s) for realistic sample
+      var realistic = above.filter(function(r){ return r.duration > 0 && Math.abs(r.duration - myKillTime) <= 25; });
+      if (realistic.length < 5) realistic = above; // fallback to all if not enough
+
+      prog('Found '+above.length+' players above rank #'+playerRank+'. Sampling detailed reports...', 30);
+
+      // Sample 10 evenly spaced for detailed analysis
+      var sampleSize = Math.min(10, realistic.length);
+      var samples = [];
+      if (sampleSize > 0) {
+        var step = Math.max(1, Math.floor(realistic.length / sampleSize));
+        for (var j=0; j<sampleSize; j++) {
+          var idx = j * step;
+          if (idx < realistic.length && realistic[idx].reportCode) samples.push(realistic[idx]);
+        }
+      }
+
+      // Step 3: Load detailed reports for each sample
+      var loaded = [];
+      var loadIdx = 0;
+      var qFn = getWclUserToken() ? wclUserQuery : wclQuery;
+
+      function loadNext() {
+        if (loadIdx >= samples.length) {
+          runAnalysis(loaded, above, playerRank);
+          return;
+        }
+        var s = samples[loadIdx];
+        loadIdx++;
+        prog('Loading report '+loadIdx+'/'+samples.length+': rank #'+s.rank+' '+s.name+'...', 30 + Math.round(loadIdx/samples.length*50));
+
+        // Check cache first
+        var cacheKey = bossName+'|'+cls+'_'+spec+'|#'+s.rank;
+        if (window._rankCompCache && window._rankCompCache[cacheKey]) {
+          loaded.push(window._rankCompCache[cacheKey]);
+          loadNext();
+          return;
+        }
+
+        qFn('{ reportData { report(code:"'+s.reportCode+'") { masterData { actors(type:"Player") { id name } } } } }').then(function(md) {
+          if (!md||!md.reportData||!md.reportData.report) throw new Error('archived');
+          var actors = md.reportData.report.masterData.actors||[];
+          var srcId = null;
+          actors.forEach(function(a){if(a.name===s.name)srcId=a.id;});
+          if (!srcId) actors.forEach(function(a){if(a.name.toLowerCase()===s.name.toLowerCase())srcId=a.id;});
+          if (!srcId) throw new Error('player not found');
+
+          var q = '{ reportData { report(code:"'+s.reportCode+'") {'+
+            ' dmgDone: table(dataType:DamageDone, fightIDs:['+s.fightId+'], sourceID:'+srcId+')'+
+            ' buffs: table(dataType:Buffs, fightIDs:['+s.fightId+'], sourceID:'+srcId+')'+
+            ' casts: table(dataType:Casts, fightIDs:['+s.fightId+'], sourceID:'+srcId+')'+
+            ' dmgTaken: table(dataType:DamageTaken, fightIDs:['+s.fightId+'], sourceID:'+srcId+')'+
+            ' } } }';
+
+          return qFn(q).then(function(fd) {
+            if (!fd||!fd.reportData||!fd.reportData.report) throw new Error('archived');
+            var r = fd.reportData.report;
+            var result = {
+              playerName: s.name, rank: s.rank, dps: s.dps,
+              dmgDone: (r.dmgDone&&r.dmgDone.data&&r.dmgDone.data.entries)||[],
+              buffs: (r.buffs&&r.buffs.data&&r.buffs.data.auras)||[],
+              casts: (r.casts&&r.casts.data&&r.casts.data.entries)||[],
+              dmgTaken: (r.dmgTaken&&r.dmgTaken.data&&r.dmgTaken.data.entries)||[],
+              totalTime: (r.dmgDone&&r.dmgDone.data&&r.dmgDone.data.totalTime)||0
+            };
+            // Validate — skip suspect Bloodlust
+            var fightS = result.totalTime/1000;
+            var suspect = false;
+            (result.buffs||[]).forEach(function(b){
+              if ((b.name||'').indexOf('Bloodlust')!==-1||(b.name||'').indexOf('Heroism')!==-1) {
+                var up = result.totalTime>0?Math.round((b.totalUptime||0)/result.totalTime*100):0;
+                var max = fightS>0?Math.round(40/fightS*100):100;
+                if (up>max+10&&fightS>60) suspect=true;
+              }
+            });
+            if (!suspect) loaded.push(result);
+            loadNext();
+          });
+        }).catch(function() { loadNext(); }); // skip archived/failed, move to next
+      }
+
+      loadNext();
+
+      function runAnalysis(comps, allAbove, myRank) {
+        prog('Crunching numbers from '+comps.length+' reports...', 90);
+        if (!comps.length) {
+          var overlay = document.getElementById('analyzeOverlay');
+          if (overlay) overlay.innerHTML = '<div style="background:#111118;border:2px solid var(--neon-red);width:500px;max-width:95vw;padding:40px;text-align:center"><div style="font-size:16px;color:var(--neon-red);margin-bottom:10px">\u274c No accessible reports found</div><div style="font-size:12px;color:var(--text-sub)">All reports in this range are archived. Try WCL Premium login to access them.</div><button class="btn" style="margin-top:12px" onclick="document.getElementById(\'analyzeOverlay\').remove()">CLOSE</button></div>';
+          return;
+        }
+
+        var myDmgMap = {}; my.dmgDone.forEach(function(a){myDmgMap[a.name]=a;});
+        var myCastMap = {}; (my.casts||[]).forEach(function(c){myCastMap[c.name]=c;});
+        var myBuffMap = {}; (my.buffs||[]).forEach(function(b){myBuffMap[b.name]=b;});
+        var myDTT = 0; (my.dmgTaken||[]).forEach(function(e){myDTT+=e.total||0;});
+        var myDeaths = (my.deaths||[]).filter(function(d){return d.name===(my.playerName||playerName);});
+        var N = comps.length, avgDps = 0;
+        var aDmg={}, aCast={}, aBuff={}, aDT=0;
+
+        comps.forEach(function(c) {
+          var cFS=c.totalTime?c.totalTime/1000:1, cFM=cFS/60;
+          var cTD=0; c.dmgDone.forEach(function(e){cTD+=e.total||0;});
+          avgDps += Math.round(cTD/cFS);
+          c.dmgDone.forEach(function(a){if(!aDmg[a.name])aDmg[a.name]={totalDmg:0,dps:0,hits:0,crits:0,n:0};aDmg[a.name].totalDmg+=a.total||0;aDmg[a.name].dps+=Math.round((a.total||0)/cFS);var h=(a.hitCount||0)+(a.critHitCount||0)+(a.tickCount||0)+(a.critTickCount||0);aDmg[a.name].hits+=h;aDmg[a.name].crits+=(a.critHitCount||0)+(a.critTickCount||0);aDmg[a.name].n++;});
+          (c.casts||[]).forEach(function(a){if(!aCast[a.name])aCast[a.name]={total:0,cpm:0,n:0};aCast[a.name].total+=a.total||0;aCast[a.name].cpm+=cFM>0?a.total/cFM:0;aCast[a.name].n++;});
+          (c.buffs||[]).forEach(function(b){if(!aBuff[b.name])aBuff[b.name]={up:0,n:0};aBuff[b.name].up+=c.totalTime>0?Math.round((b.totalUptime||0)/c.totalTime*100):0;aBuff[b.name].n++;});
+          var cDT=0;(c.dmgTaken||[]).forEach(function(e){cDT+=e.total||0;});aDT+=Math.round(cDT/cFS);
+        });
+        avgDps=Math.round(avgDps/N);aDT=Math.round(aDT/N);
+        Object.keys(aDmg).forEach(function(k){var d=aDmg[k];d.dps=Math.round(d.dps/d.n);d.hits=Math.round(d.hits/d.n);d.crits=Math.round(d.crits/d.n);d.totalDmg=Math.round(d.totalDmg/d.n);});
+        Object.keys(aCast).forEach(function(k){aCast[k].cpm=+(aCast[k].cpm/aCast[k].n).toFixed(1);aCast[k].total=Math.round(aCast[k].total/aCast[k].n);});
+        Object.keys(aBuff).forEach(function(k){aBuff[k].up=Math.round(aBuff[k].up/aBuff[k].n);});
+
+        var gap = avgDps - myDps;
+        var insights = [];
+        var ABILITY_SKIP = ['Evasion','Vanish','Sprint','Cloak of Shadows','Blind','Sap','Kick','Feint','Kidney Shot','Gouge','Drums of','Abacus','Trinket','Healthstone','Healing Potion','Bandage','Mana Potion','Dark Rune','Super Mana','Demonic Rune','Nightmare Seed','Free Action','Living Action','Restorative','Shoot','Wand','Throw','Auto Shot','Stealth','Pick Lock','Pick Pocket','Detect Traps','Disarm Trap'];
+        function isSkipAbility(name){var skip=false;ABILITY_SKIP.forEach(function(pat){if(name.indexOf(pat)!==-1)skip=true;});return skip;}
+
+        // Cast frequency
+        Object.keys(aCast).forEach(function(name){
+          if(isSkipAbility(name))return;
+          var avg=aCast[name],mine=myCastMap[name];
+          var myCpm=mine&&myFM>0?+(mine.total/myFM).toFixed(1):0;
+          var myCasts=mine?mine.total:0;
+          var diff=avg.cpm-myCpm;
+          if(diff>0.3&&avg.cpm>0.5){var avgD=aDmg[name];var dpc=avgD&&avgD.hits>0?Math.round(avgD.totalDmg/avgD.hits):0;var missedCasts=Math.round(diff*myFM);var estGain=myFS>0?Math.round(missedCasts*dpc/myFS):0;
+          insights.push({priority:estGain,estGain:estGain,html:'<td style="color:var(--neon-cyan)">\u26a1 Cast Frequency</td><td><span style="color:var(--text-bright)">'+name+'</span></td><td>You: <b>'+myCasts+'</b> casts ('+myCpm+' CPM). Top 100 avg: <b>'+avg.total+'</b> casts ('+avg.cpm+' CPM). Missing <b style="color:var(--neon-orange)">'+missedCasts+' casts</b>.'+(dpc>0?' Each \u2248 <b>'+fmtK(dpc)+'</b> dmg.':'')+'</td><td style="color:var(--neon-green);font-weight:900;text-align:right">+'+estGain+'</td>'});}
+        });
+        // Missing
+        Object.keys(aCast).forEach(function(name){if(isSkipAbility(name))return;if(!myCastMap[name]&&aCast[name].cpm>0.3){var avgD=aDmg[name];var est=avgD?avgD.dps:0;insights.push({priority:est,estGain:est,html:'<td style="color:var(--neon-red)">\u274c Missing Spell</td><td><span style="color:var(--text-bright)">'+name+'</span></td><td>You <b>never cast</b> this. Top 100 cast it <b>'+aCast[name].total+'</b> times ('+aCast[name].cpm+' CPM).'+(avgD?' Worth <b>'+fmtK(avgD.totalDmg)+'</b> total damage.':'')+'</td><td style="color:var(--neon-green);font-weight:900;text-align:right">+'+est+'</td>'});}});
+        // Wasted
+        Object.keys(myCastMap).forEach(function(name){if(isSkipAbility(name))return;if(!aCast[name]&&myCastMap[name].total>1){var mc=myCastMap[name].total;var md=myDmgMap[name];insights.push({priority:15,estGain:0,html:'<td style="color:var(--neon-orange)">\u26a0 Wasted GCDs</td><td><span style="color:var(--text-bright)">'+name+'</span></td><td>You cast this <b>'+mc+'</b> times'+(md&&md.total?' for <b>'+fmtK(md.total)+'</b> dmg':'')+' but <b>none of the top 100</b> use it.</td><td style="color:#888;text-align:right">\u2014</td>'});}});
+        // Damage gaps
+        Object.keys(aDmg).forEach(function(name){var avg=aDmg[name];var mine=myDmgMap[name];if(!mine||!avg)return;var myAbDps=Math.round((mine.total||0)/myFS);var dpsDiff=avg.dps-myAbDps;if(dpsDiff>20&&avg.dps>50){var myHits=(mine.hitCount||0)+(mine.critHitCount||0)+(mine.tickCount||0)+(mine.critTickCount||0);var myCrits=(mine.critHitCount||0)+(mine.critTickCount||0);var myCritPct=myHits>0?Math.round(myCrits/myHits*100):0;var avgCritPct=avg.hits>0?Math.round(avg.crits/avg.hits*100):0;var hitDiff=avg.hits-myHits;var critDiff=avgCritPct-myCritPct;if(!aCast[name]||!myCastMap[name]||Math.abs(aCast[name].cpm-(myCastMap[name].total/myFM))<0.5){var detail='You: <b>'+myAbDps+'</b> DPS ('+fmtK(mine.total||0)+', '+myHits+' hits, '+myCritPct+'% crit). Top 100: <b>'+avg.dps+'</b> DPS ('+fmtK(avg.totalDmg)+', '+avg.hits+' hits, '+avgCritPct+'% crit).';if(hitDiff>2)detail+=' They land <b style="color:var(--neon-orange)">'+hitDiff+' more hits</b>.';if(critDiff>5)detail+=' Crit rate <b style="color:var(--neon-orange)">'+critDiff+'% higher</b>.';insights.push({priority:dpsDiff,estGain:dpsDiff,html:'<td style="color:var(--neon-purple)">\u2694 Damage Gap</td><td><span style="color:var(--text-bright)">'+name+'</span></td><td>'+detail+'</td><td style="color:var(--neon-green);font-weight:900;text-align:right">+'+dpsDiff+'</td>'});}}});
+        // Buffs
+        var RAID_BUFFS_SKIP=['Bloodlust','Heroism','Greater Blessing','Prayer of','Gift of the Wild','Mark of the Wild','Arcane Brilliance','Arcane Intellect','Battle Shout','Commanding Shout','Ferocious Inspiration','Blessing of','Leader of the Pack','Moonkin Aura','Totem','Devotion Aura','Retribution Aura','Concentration Aura','Sanctity Aura','Resistance Aura','Trueshot Aura','Inspiration','Power Infusion','Innervate','Lifebloom','Renew','Rejuvenation','Regrowth','Prayer of Mending','Earth Shield','Power Word:','Battle Squawk','Drums of','Shadow Word:','Vampiric','Grace of Air','Windfury','Wrath of Air','Mana Spring','Strength of Earth','Brilliance Aura','Improved','Braided Eternium','Noggenfogger','Nightmare Seed','Fungal Frenzy','Spirit Tap','Fortitude','Stamina','Health','Armor','Protection','Shield','Thorns','Stoneskin','Swiftness','Free Action','Healing Potion','Healthstone','Living Action','Restorative','Night Dragon','Rumsey'];
+        Object.keys(aBuff).forEach(function(name){var skip=false;RAID_BUFFS_SKIP.forEach(function(pat){if(name.indexOf(pat)!==-1)skip=true;});if(skip)return;var avg=aBuff[name];var mine=myBuffMap[name];var myUp=mine&&my.totalTime>0?Math.round((mine.totalUptime||0)/my.totalTime*100):0;var diff=avg.up-myUp;if(diff>15&&avg.up>25){var est=Math.round(diff*0.5);var isCons=name.indexOf('Flask')!==-1||name.indexOf('Elixir')!==-1||name.indexOf('Well Fed')!==-1||name.indexOf('Oil')!==-1||name.indexOf('Destruction')!==-1;insights.push({priority:diff,estGain:est,html:'<td style="color:var(--neon-green)">\u2b06 '+(isCons?'Consumable':'Buff')+'</td><td><span style="color:var(--text-bright)">'+name+'</span></td><td>You: <b>'+myUp+'%</b>. Top 100 avg: <b>'+avg.up+'%</b> (+'+diff+'%). '+(myUp===0?(isCons?'Not using this consumable.':'Completely missing.'):'Maintain better uptime.')+'</td><td style="color:var(--neon-green);font-weight:900;text-align:right">~+'+est+'</td>'});}});
+        // Damage taken
+        var myDtps=Math.round(myDTT/myFS);
+        if(myDtps>aDT*1.25&&myDtps>50){var excess=myDtps-aDT;var topSrc=(my.dmgTaken||[]).slice().sort(function(a,b){return(b.total||0)-(a.total||0);}).slice(0,3);var srcText=topSrc.map(function(s){return s.name+' ('+fmtK(s.total||0)+')';}).join(', ');insights.push({priority:excess*2,estGain:0,html:'<td style="color:var(--neon-orange)">\ud83d\udee1 Damage Taken</td><td><span style="color:var(--text-bright)">Survivability</span></td><td>You: <b>'+myDtps+' DTPS</b> vs top 100 avg <b>'+aDT+' DTPS</b> \u2014 <b style="color:var(--neon-red)">'+excess+' more</b>. Top sources: '+srcText+'</td><td style="color:#888;text-align:right">survival</td>'});}
+        // Deaths
+        if(myDeaths.length){var causes=myDeaths.map(function(d){return d.killingBlow?d.killingBlow.name||'Unknown':'Unknown';}).join(', ');insights.push({priority:500,estGain:0,html:'<td style="color:var(--neon-red)">\u2620 Deaths</td><td><span style="color:var(--text-bright)">You died '+myDeaths.length+'x</span></td><td>Killed by: <b style="color:var(--neon-red)">'+causes+'</b>. Dead DPS = zero DPS. Fix this first.</td><td style="color:var(--neon-red);font-weight:900;text-align:right">CRITICAL</td>'});}
+
+        insights.sort(function(a,b){return b.priority-a.priority;});
+        var totalEstGain=0;insights.forEach(function(i){totalEstGain+=i.estGain||0;});
+
+        // Stats from all 100 above
+        var avgAboveDps = 0;
+        allAbove.forEach(function(r){avgAboveDps+=r.dps;});
+        avgAboveDps = allAbove.length ? Math.round(avgAboveDps/allAbove.length) : avgDps;
+        var topDps = allAbove.length ? allAbove[0].dps : avgDps;
+
+        // Render
+        var o = document.getElementById('analyzeOverlay');
+        var rh = '<div style="background:#111118;border:2px solid var(--neon-cyan);width:900px;max-width:95vw;margin:20px auto">';
+        rh += '<div style="padding:12px 20px;border-bottom:2px solid #2a2a44;display:flex;justify-content:space-between;align-items:center">';
+        rh += '<span style="font-family:Orbitron,sans-serif;font-size:14px;color:var(--neon-cyan);letter-spacing:2px">\ud83d\udd0d WHAT\u2019S HOLDING ME BACK?</span>';
+        rh += '<button onclick="document.getElementById(\'analyzeOverlay\').remove()" style="background:none;border:none;color:#ff2244;font-size:22px;cursor:pointer">\u00d7</button>';
+        rh += '</div>';
+        rh += '<div style="padding:10px 20px;background:#0a0a14;border-bottom:1px solid #2a2a44;display:flex;gap:16px;align-items:center;font-family:Share Tech Mono,monospace;font-size:12px;flex-wrap:wrap">';
+        rh += '<span style="color:var(--neon-cyan)">YOU: <b>'+myDps.toLocaleString()+'</b> DPS (rank ~#'+myRank+')</span>';
+        rh += '<span style="color:var(--text-sub)">\u2192</span>';
+        rh += '<span style="color:var(--neon-green)">TOP 100 AVG: <b>'+avgAboveDps.toLocaleString()+'</b> DPS</span>';
+        rh += '<span style="color:var(--neon-orange)">#1: <b>'+topDps.toLocaleString()+'</b> DPS</span>';
+        rh += '<span style="color:var(--neon-red)">GAP: <b>'+gap.toLocaleString()+'</b></span>';
+        rh += '<span style="color:var(--neon-orange)">RECOVERABLE: <b>~'+totalEstGain.toLocaleString()+'</b></span>';
+        rh += '<span style="color:#555">'+N+' detailed reports analyzed</span>';
+        rh += '</div>';
+        rh += '<div style="padding:12px 16px;max-height:70vh;overflow-y:auto">';
+        if(!insights.length){rh+='<div style="text-align:center;padding:20px;color:var(--neon-green);font-size:13px">\u2705 No significant gaps \u2014 you\u2019re performing at ranked level.</div>';}
+        else{rh+='<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#666;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:4px;width:110px">TYPE</th><th style="text-align:left;padding:4px;width:120px">ABILITY</th><th style="text-align:left;padding:4px">ANALYSIS</th><th style="text-align:right;padding:4px;width:70px">EST DPS</th></tr></thead><tbody>';
+        insights.forEach(function(ins,i){rh+='<tr style="border-bottom:1px solid #1a1a34;'+(i===0?'background:rgba(255,34,68,0.05)':'')+'">'+ins.html+'</tr>';});
+        rh+='</tbody></table>';}
+        rh += '</div></div>';
+        if(o)o.innerHTML=rh;
+      }
+    });
+  }).catch(function(err) {
+    var o = document.getElementById('analyzeOverlay');
+    if(o)o.innerHTML='<div style="background:#111118;border:2px solid var(--neon-red);width:500px;max-width:95vw;padding:40px;text-align:center"><div style="font-size:14px;color:var(--neon-red)">\u274c '+err.message+'</div><button class="btn" style="margin-top:12px" onclick="document.getElementById(\'analyzeOverlay\').remove()">CLOSE</button></div>';
+  });
 }
 
 function openRankLimitEditor(cls, boss) {
