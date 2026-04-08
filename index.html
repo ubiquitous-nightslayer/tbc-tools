@@ -483,6 +483,7 @@ body.light-theme .font-label, body.light-theme label[style*="color:#6a8a9a"] { c
 .toolbar-group { position:relative; display:inline-block; }
 .toolbar-btn { font-family:'Share Tech Mono',monospace; font-size:11px; font-weight:700; padding:5px 10px; background:transparent; border:1px solid var(--border); color:var(--text-sub); cursor:pointer; letter-spacing:1px; transition:all .15s; white-space:nowrap; }
 .toolbar-btn:hover { border-color:var(--neon-cyan); color:var(--neon-cyan); }
+.raid-boss-dropdown { display:none; position:absolute; top:100%; left:0; background:#111118; border:1px solid var(--neon-cyan); z-index:200; min-width:220px; max-height:400px; overflow-y:auto; padding:4px 0; }
 .toolbar-btn.accent-green { border-color:var(--neon-green); color:var(--neon-green); }
 .toolbar-btn.accent-green:hover { background:rgba(0,255,136,0.08); }
 .toolbar-dropdown { display:none; position:absolute; top:100%; right:0; z-index:150; background:#14142a; border:1px solid var(--neon-cyan); min-width:180px; margin-top:2px; }
@@ -534,8 +535,7 @@ body.viewer-mode .viewer-badge { display:inline-flex !important; }
 <body>
 
 <div class="header">
-  <div class="guild-logo" id="guildNameDisplay" onclick="switchView('assignments')" style="cursor:pointer" title="Back to Assignments">TBC ASSIGNMENTS</div>
-  <div class="sheet-title">TBC Assignment Sheet</div>
+  <div class="guild-logo" id="guildNameDisplay" onclick="switchView('assignments')" style="cursor:pointer" title="Back to Assignments">UBIQUITOUS</div>
   <span class="viewer-badge">👁 VIEW ONLY</span>
   <nav id="mainNav" style="display:flex;gap:2px;margin-left:16px">
     <button class="nav-tab active" onclick="switchView('assignments')">📋 Assignments</button>
@@ -544,6 +544,20 @@ body.viewer-mode .viewer-badge { display:inline-flex !important; }
     <button class="nav-tab" onclick="switchView('performance')">📊 Performance</button>
   </nav>
   <div class="header-actions">
+    <!-- Lock/Unlock -->
+    <button class="lock-toggle" id="lockBtn" onclick="toggleLock()">🔓 UNLOCKED</button>
+    <!-- Share & Export -->
+    <div class="toolbar-group">
+      <button class="toolbar-btn" onclick="toggleToolbarDrop(this)" title="Share & Export">📤 SHARE ▾</button>
+      <div class="toolbar-dropdown">
+        <button class="toolbar-drop-item" onclick="generateShareLink()"><span>📤</span> Share Raider Link</button>
+        <button class="toolbar-drop-item" onclick="downloadXLSX()"><span>📥</span> Download XLSX</button>
+        <button class="toolbar-drop-item" onclick="exportRaidMRT()"><span>📋</span> Export MRT (All Bosses)</button>
+        <div class="toolbar-sep"></div>
+        <button class="toolbar-drop-item" onclick="openKeyModal('save')"><span>🔐</span> Save Raid Key</button>
+        <button class="toolbar-drop-item" onclick="openKeyModal('load')"><span>🔓</span> Load Raid Key</button>
+      </div>
+    </div>
     <!-- Cloud -->
     <div class="toolbar-group">
       <button class="toolbar-btn accent-green" onclick="toggleToolbarDrop(this)" title="Cloud Save & Load">☁️ CLOUD ▾</button>
@@ -565,23 +579,10 @@ body.viewer-mode .viewer-badge { display:inline-flex !important; }
         <button class="toolbar-drop-item" onclick="openWclUserTokenModal()"><span>🔑</span> WCL Premium Login</button>
       </div>
     </div>
-    <!-- Share & Export -->
-    <div class="toolbar-group">
-      <button class="toolbar-btn" onclick="toggleToolbarDrop(this)" title="Share & Export">📤 SHARE ▾</button>
-      <div class="toolbar-dropdown">
-        <button class="toolbar-drop-item" onclick="generateShareLink()"><span>📤</span> Share Raider Link</button>
-        <button class="toolbar-drop-item" onclick="downloadXLSX()"><span>📥</span> Download XLSX</button>
-        <button class="toolbar-drop-item" onclick="exportRaidMRT()"><span>📋</span> Export MRT (All Bosses)</button>
-        <div class="toolbar-sep"></div>
-        <button class="toolbar-drop-item" onclick="openKeyModal('save')"><span>🔐</span> Save Raid Key</button>
-        <button class="toolbar-drop-item" onclick="openKeyModal('load')"><span>🔓</span> Load Raid Key</button>
-      </div>
-    </div>
     <!-- Standalone -->
-    <button class="toolbar-btn" id="authHeaderBtn" onclick="openLoginPanel()" title="Login / Account" style="border-color:var(--neon-cyan);color:var(--neon-cyan)">🔐 LOGIN</button>
-    <button class="toolbar-btn" onclick="openSetupPanel()" title="Setup & Credentials" style="border-color:var(--neon-cyan);color:var(--neon-cyan)">⚙ SETUP</button>
     <button class="toolbar-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle Theme">☀️</button>
-    <button class="lock-toggle" id="lockBtn" onclick="toggleLock()">🔓 UNLOCKED</button>
+    <button class="toolbar-btn" onclick="openSetupPanel()" title="Setup & Credentials" style="border-color:var(--neon-cyan);color:var(--neon-cyan)">⚙ SETUP</button>
+    <button class="toolbar-btn" id="authHeaderBtn" onclick="openLoginPanel()" title="Login / Account" style="border-color:var(--neon-cyan);color:var(--neon-cyan)">🔐 LOGIN</button>
   </div>
 </div>
 
@@ -604,6 +605,7 @@ function toggleToolbarDrop(btn) {
   var wasOpen = group.classList.contains('open');
   // Close all dropdowns first
   document.querySelectorAll('.toolbar-group.open').forEach(function(g) { g.classList.remove('open'); });
+  document.querySelectorAll('.raid-boss-dropdown').forEach(function(d) { d.style.display = 'none'; });
   // Toggle this one
   if (!wasOpen) group.classList.add('open');
 }
@@ -611,6 +613,7 @@ function toggleToolbarDrop(btn) {
 document.addEventListener('click', function(e) {
   if (!e.target.closest('.toolbar-group')) {
     document.querySelectorAll('.toolbar-group.open').forEach(function(g) { g.classList.remove('open'); });
+    document.querySelectorAll('.raid-boss-dropdown').forEach(function(d) { d.style.display = 'none'; });
   }
 });
 // Close dropdown after clicking an item (with slight delay so the action fires first)
@@ -2002,6 +2005,7 @@ function renderMapPanel(boss, raid, key, a) {
     '<span style="flex:1"></span>' +
     renderVideoSection(key, a) +
     '<div class="zoom-controls">' +
+    '<button class="zoom-btn" id="mapLockBtn" onclick="toggleMapLock()" title="Lock/Unlock map zoom">🔒</button>' +
     '<button class="zoom-btn" onclick="zoomMap(-0.5)">−</button>' +
     '<span class="zoom-level" id="zoomLevel">100%</span>' +
     '<button class="zoom-btn" onclick="zoomMap(0.5)">+</button>' +
@@ -3874,7 +3878,7 @@ function cloudSave() {
     server: cfg.server || '',
     roster: GUILD_ROSTER || [],
     savedAt: new Date().toISOString(),
-    savedBy: prompt('Your character name (for history):') || 'Unknown',
+    savedBy: (_user && _user.user_metadata && _user.user_metadata.full_name) ? _user.user_metadata.full_name : ((_user && _user.email) ? _user.email.split('@')[0] : 'Unknown'),
     assignments: assignments,
   };
 
@@ -8215,6 +8219,13 @@ function quickLoad() {
 // ═══════════════════════════════════════════
 function getZoomKey() { return RAIDS[currentRaid].id + '_' + RAIDS[currentRaid].bosses[currentBoss].id + '_zoom'; }
 
+var _mapZoomLocked = true; // Start locked by default
+function toggleMapLock() {
+  _mapZoomLocked = !_mapZoomLocked;
+  var btn = document.getElementById('mapLockBtn');
+  if (btn) btn.textContent = _mapZoomLocked ? '\ud83d\udd12' : '\ud83d\udd13';
+}
+
 function zoomMap(delta) {
   const k = getZoomKey();
   if (!zoomStates[k]) zoomStates[k] = { scale:1, x:0, y:0 };
@@ -8266,6 +8277,7 @@ function initMapDrag() {
   wrapper.addEventListener('mouseup', () => dragging = false);
   wrapper.addEventListener('mouseleave', () => dragging = false);
   wrapper.addEventListener('wheel', e => {
+    if (_mapZoomLocked) return; // Let page scroll normally when locked
     e.preventDefault();
     zoomMap(e.deltaY < 0 ? 0.3 : -0.3);
   }, { passive: false });
@@ -8275,7 +8287,10 @@ function initMapDrag() {
 // ═══════════════════════════════════════════
 // TOAST
 // ═══════════════════════════════════════════
+var _toastHistory = [];
 function toast(msg) {
+  _toastHistory.push({msg: msg, time: new Date()});
+  if (_toastHistory.length > 50) _toastHistory.shift();
   var container = document.getElementById('toastContainer');
   if (!container) {
     container = document.createElement('div');
@@ -8283,10 +8298,21 @@ function toast(msg) {
     container.className = 'toast-container';
     document.body.appendChild(container);
   }
-  var t = document.createElement('div');
-  t.className = 'toast';
-  t.innerHTML = '<span>' + msg + '</span><button class="toast-close" onclick="this.parentElement.remove()">×</button>';
-  container.appendChild(t);
+  // Only show the latest toast
+  var count = _toastHistory.length;
+  container.innerHTML = '<div class="toast"><span>' + msg + '</span>' +
+    (count > 1 ? '<button style="background:none;border:1px solid #555;color:#888;font-size:9px;padding:1px 6px;margin-left:8px;cursor:pointer;font-family:Share Tech Mono,monospace" onclick="expandToasts()">' + count + ' msgs</button>' : '') +
+    '<button class="toast-close" onclick="this.parentElement.parentElement.innerHTML=\'\'">×</button></div>';
+}
+function expandToasts() {
+  var container = document.getElementById('toastContainer');
+  if (!container) return;
+  var h = '';
+  _toastHistory.slice().reverse().forEach(function(t, i) {
+    h += '<div class="toast" style="'+(i>0?'opacity:0.7':'')+'"><span>' + t.msg + '</span>' +
+      (i===0?'<button class="toast-close" onclick="document.getElementById(\'toastContainer\').innerHTML=\'\'">×</button>':'') + '</div>';
+  });
+  container.innerHTML = h;
 }
 
 // ═══════════════════════════════════════════
@@ -8332,19 +8358,30 @@ function init() {
 // ═══════════════════════════════════════════
 function renderRaidTabs() {
   document.getElementById('raidTabs').innerHTML = RAIDS.map((r, i) => `
-    <button class="raid-tab ${i===currentRaid?'active':''}" onclick="currentRaid=${i};currentBoss=0;renderRaidTabs();renderBossTabs();renderBoss()">
-      ${r.name}<span class="tier-badge ${r.tierClass}">${r.tier}·${r.size}p</span>
-    </button>
+    <div class="toolbar-group" style="position:relative">
+      <button class="raid-tab ${i===currentRaid?'active':''}" onclick="if(currentRaid===${i}){toggleRaidDrop(this)}else{currentRaid=${i};currentBoss=0;renderRaidTabs();renderBossTabs();renderBoss();}">
+        ${r.name}<span class="tier-badge ${r.tierClass}">${r.tier}·${r.size}p</span>
+      </button>
+      ${i===currentRaid ? '<div class="raid-boss-dropdown" id="raidBossDrop">' + r.bosses.map((b, bi) => `
+        <button class="toolbar-drop-item ${bi===currentBoss?'style=color:var(--neon-cyan);font-weight:900':''}" onclick="currentBoss=${bi};closeAllDropdowns();renderRaidTabs();renderBossTabs();renderBoss()">${b.name}</button>
+      `).join('') + '</div>' : ''}
+    </div>
   `).join('');
+}
+function toggleRaidDrop(btn) {
+  var drop = btn.nextElementSibling;
+  if (!drop) return;
+  var vis = drop.style.display === 'block';
+  closeAllDropdowns();
+  if (!vis) drop.style.display = 'block';
+}
+function closeAllDropdowns() {
+  document.querySelectorAll('.raid-boss-dropdown,.toolbar-dropdown').forEach(function(d){d.style.display='none';});
 }
 
 function renderBossTabs() {
-  const raid = RAIDS[currentRaid];
-  document.getElementById('bossTabs').innerHTML = raid.bosses.map((b, i) => `
-    <button class="boss-tab ${i===currentBoss?'active':''}" onclick="currentBoss=${i};renderBossTabs();renderBoss()">
-      ${b.name}
-    </button>
-  `).join('');
+  // Boss tabs now hidden — handled by raid dropdown
+  document.getElementById('bossTabs').innerHTML = '';
 }
 
 function renderBoss() {
