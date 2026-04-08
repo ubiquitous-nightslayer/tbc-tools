@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <script>var whTooltips = {colorLinks: false, iconizeLinks: false, renameLinks: false};</script>
 <script src="https://wow.zamimg.com/js/tooltips.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --bg-dark: #0a0a0f;
@@ -577,6 +578,7 @@ body.viewer-mode .viewer-badge { display:inline-flex !important; }
       </div>
     </div>
     <!-- Standalone -->
+    <button class="toolbar-btn" id="authHeaderBtn" onclick="openLoginPanel()" title="Login / Account" style="border-color:var(--neon-cyan);color:var(--neon-cyan)">🔐 LOGIN</button>
     <button class="toolbar-btn" onclick="openSetupPanel()" title="Setup & Credentials" style="border-color:var(--neon-cyan);color:var(--neon-cyan)">⚙ SETUP</button>
     <button class="toolbar-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle Theme">☀️</button>
     <button class="lock-toggle" id="lockBtn" onclick="toggleLock()">🔓 UNLOCKED</button>
@@ -621,6 +623,382 @@ document.addEventListener('click', function(e) {
 });
 
 // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// USER AUTH SYSTEM (Supabase)
+// ═══════════════════════════════════════════
+var SUPABASE_URL = 'https://wnlvjltsowjxxoseezun.supabase.co';
+var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndubHZqbHRzb3dqeHhvc2VlenVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MTQ5MDksImV4cCI6MjA5MTE5MDkwOX0.lC8ublTZnUS69W5uyKDqBqZLoFu-Cod3xZokxZGL6E4';
+var _sb = null; // Supabase client
+var _user = null; // Current user
+var _guild = null; // Current guild
+var _guildRole = null; // User's role in current guild
+
+function initSupabase() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return false;
+  if (typeof supabase === 'undefined') return false;
+  _sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  return true;
+}
+
+// ── AUTH FUNCTIONS ──
+async function authRegister(email, password, displayName) {
+  if (!_sb) throw new Error('Database not configured');
+  var result = await _sb.auth.signUp({ email: email, password: password, options: { data: { display_name: displayName } } });
+  if (result.error) throw result.error;
+  _user = result.data.user;
+  return _user;
+}
+
+async function authLogin(email, password) {
+  if (!_sb) throw new Error('Database not configured');
+  var result = await _sb.auth.signInWithPassword({ email: email, password: password });
+  if (result.error) throw result.error;
+  _user = result.data.user;
+  await loadUserGuilds();
+  return _user;
+}
+
+async function authLogout() {
+  if (_sb) await _sb.auth.signOut();
+  _user = null; _guild = null; _guildRole = null;
+}
+
+async function authGetSession() {
+  if (!_sb) return null;
+  var result = await _sb.auth.getSession();
+  if (result.data.session) {
+    _user = result.data.session.user;
+    await loadUserGuilds();
+  }
+  return _user;
+}
+
+// ── GUILD FUNCTIONS ──
+async function loadUserGuilds() {
+  if (!_sb || !_user) return [];
+  var result = await _sb.from('guild_members').select('guild_id, role, guilds(*)').eq('user_id', _user.id);
+  if (result.error) { console.log('Guild load error:', result.error); return []; }
+  window._userGuilds = result.data || [];
+  // Auto-select first guild if none selected
+  if (window._userGuilds.length && !_guild) {
+    var gm = window._userGuilds[0];
+    _guild = gm.guilds;
+    _guildRole = gm.role;
+    applyGuildConfig(_guild);
+  }
+  return window._userGuilds;
+}
+
+async function createGuild(name, server, wclGuildId) {
+  if (!_sb || !_user) throw new Error('Not logged in');
+  var result = await _sb.from('guilds').insert({ name: name, server: server, wcl_guild_id: wclGuildId, created_by: _user.id }).select().single();
+  if (result.error) throw result.error;
+  // Add creator as GM
+  await _sb.from('guild_members').insert({ guild_id: result.data.id, user_id: _user.id, role: 'gm' });
+  _guild = result.data;
+  _guildRole = 'gm';
+  return result.data;
+}
+
+async function saveGuildToDB() {
+  if (!_sb || !_guild) return;
+  var cfg = getGuildConfig();
+  await _sb.from('guilds').update({
+    wcl_client_id: cfg.wclClientId || '',
+    wcl_client_secret: cfg.wclClientSecret || '',
+    wcl_guild_id: cfg.wclGuildId || cfg.wclId || '',
+    gist_id: cfg.gistId || '',
+    gist_token: cfg.gistToken || '',
+    config: cfg
+  }).eq('id', _guild.id);
+}
+
+function applyGuildConfig(guild) {
+  if (!guild) return;
+  var cfg = getGuildConfig();
+  cfg.guildName = guild.name || cfg.guildName;
+  cfg.server = guild.server || cfg.server;
+  cfg.wclClientId = guild.wcl_client_id || cfg.wclClientId;
+  cfg.wclClientSecret = guild.wcl_client_secret || cfg.wclClientSecret;
+  cfg.wclGuildId = guild.wcl_guild_id || cfg.wclGuildId;
+  cfg.gistId = guild.gist_id || cfg.gistId;
+  cfg.gistToken = guild.gist_token || cfg.gistToken;
+  if (guild.config) Object.keys(guild.config).forEach(function(k) { if (!cfg[k] && guild.config[k]) cfg[k] = guild.config[k]; });
+  saveGuildConfig(cfg);
+  if (typeof updateGuildDisplay === 'function') updateGuildDisplay();
+}
+
+// ── INVITE CODES ──
+async function generateInviteCode(role) {
+  if (!_sb || !_guild) throw new Error('No guild selected');
+  if (_guildRole !== 'gm' && _guildRole !== 'officer') throw new Error('Officers only');
+  var code = Math.random().toString(36).substring(2, 8).toUpperCase();
+  var result = await _sb.from('invite_codes').insert({
+    code: code, guild_id: _guild.id, role: role || 'raider', created_by: _user.id,
+    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  }).select().single();
+  if (result.error) throw result.error;
+  return code;
+}
+
+async function useInviteCode(code) {
+  if (!_sb || !_user) throw new Error('Not logged in');
+  var result = await _sb.from('invite_codes').select('*, guilds(*)').eq('code', code.toUpperCase()).single();
+  if (result.error) throw new Error('Invalid invite code');
+  var inv = result.data;
+  if (inv.expires_at && new Date(inv.expires_at) < new Date()) throw new Error('Invite code expired');
+  if (inv.max_uses > 0 && inv.use_count >= inv.max_uses) throw new Error('Invite code fully used');
+  // Join guild
+  var joinResult = await _sb.from('guild_members').insert({ guild_id: inv.guild_id, user_id: _user.id, role: inv.role });
+  if (joinResult.error) {
+    if (joinResult.error.code === '23505') throw new Error('Already a member of this guild');
+    throw joinResult.error;
+  }
+  // Increment use count
+  await _sb.from('invite_codes').update({ use_count: (inv.use_count || 0) + 1 }).eq('code', code.toUpperCase());
+  _guild = inv.guilds;
+  _guildRole = inv.role;
+  applyGuildConfig(_guild);
+  return inv.guilds;
+}
+
+// ── LOGIN UI ──
+function openLoginPanel() {
+  var existing = document.getElementById('authPanel');
+  if (existing) { existing.remove(); return; }
+
+  var h = '<div id="authPanel" style="position:fixed;inset:0;background:rgba(5,5,20,0.95);z-index:300;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">';
+  h += '<div style="background:#111118;border:2px solid var(--neon-cyan);width:440px;max-width:95vw">';
+  
+  if (_user) {
+    // ═══ LOGGED IN VIEW ═══
+    var profile = _user.user_metadata || {};
+    h += '<div style="padding:14px 20px;border-bottom:2px solid #2a2a44;display:flex;justify-content:space-between;align-items:center">';
+    h += '<span style="font-family:Orbitron,sans-serif;font-size:14px;color:var(--neon-cyan);letter-spacing:2px">\ud83d\udc64 '+(profile.display_name||_user.email)+'</span>';
+    h += '<button onclick="document.getElementById(\'authPanel\').remove()" style="background:none;border:none;color:#ff2244;font-size:22px;cursor:pointer">\u00d7</button>';
+    h += '</div>';
+    h += '<div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">';
+    // Guild info
+    if (_guild) {
+      h += '<div style="background:rgba(0,255,136,0.05);border:1px solid var(--neon-green);padding:10px">';
+      h += '<div style="color:var(--neon-green);font-weight:900;font-size:13px">'+_guild.name+' <span style="color:#888;font-size:10px;font-weight:400">'+(_guild.server||'')+' \u2022 '+(_guildRole||'').toUpperCase()+'</span></div>';
+      h += '</div>';
+      // Invite codes (GM/Officer only)
+      if (_guildRole === 'gm' || _guildRole === 'officer') {
+        h += '<div style="display:flex;gap:6px">';
+        h += '<button class="btn" style="font-size:11px;padding:4px 12px;border-color:var(--neon-cyan);color:var(--neon-cyan)" onclick="authGenInvite(\'officer\')">GENERATE OFFICER INVITE</button>';
+        h += '<button class="btn" style="font-size:11px;padding:4px 12px;border-color:var(--neon-green);color:var(--neon-green)" onclick="authGenInvite(\'raider\')">GENERATE RAIDER INVITE</button>';
+        h += '</div>';
+        h += '<div id="authInviteResult" style="font-size:10px;color:#555"></div>';
+      }
+      h += '<button class="btn" style="font-size:11px;padding:4px 12px" onclick="openSetupPanel();document.getElementById(\'authPanel\').remove()">GUILD SETTINGS</button>';
+    } else {
+      // No guild — join or create
+      h += '<div style="background:#0a0a14;border:1px solid var(--neon-orange);padding:12px">';
+      h += '<div style="font-weight:900;color:var(--neon-orange);font-size:12px;margin-bottom:6px">JOIN A GUILD</div>';
+      h += '<div style="display:flex;gap:6px">';
+      h += '<input id="authInviteInput" type="text" style="flex:1;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid var(--neon-orange);color:var(--neon-orange);padding:6px 8px;outline:none;text-transform:uppercase" placeholder="Enter invite code...">';
+      h += '<button class="btn primary" style="font-size:12px;padding:6px 14px" onclick="authJoinGuild()">JOIN</button>';
+      h += '</div></div>';
+      h += '<div style="text-align:center;color:#555;font-size:10px;padding:4px">\u2014 OR \u2014</div>';
+      h += '<button class="btn" style="font-size:11px;padding:6px 14px;width:100%;border-color:var(--neon-cyan);color:var(--neon-cyan)" onclick="authShowCreateGuild()">CREATE NEW GUILD</button>';
+      h += '<div id="authCreateArea"></div>';
+    }
+    h += '<button class="btn danger" style="font-size:10px;padding:4px 12px;margin-top:8px" onclick="authDoLogout()">LOGOUT</button>';
+    h += '</div>';
+  } else {
+    // ═══ LOGIN / REGISTER VIEW ═══
+    h += '<div style="padding:14px 20px;border-bottom:2px solid #2a2a44">';
+    h += '<span style="font-family:Orbitron,sans-serif;font-size:16px;color:var(--neon-cyan);letter-spacing:2px">\ud83d\udd10 LOGIN</span>';
+    h += '</div>';
+    h += '<div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">';
+    // Social login buttons
+    h += '<button style="width:100%;font-family:Share Tech Mono,monospace;font-size:14px;padding:10px 20px;background:#5865F2;border:none;color:#fff;cursor:pointer;font-weight:900;letter-spacing:1px;display:flex;align-items:center;justify-content:center;gap:8px" onclick="authSocialLogin(\'discord\')">';
+    h += '<svg width="20" height="15" viewBox="0 0 71 55" fill="#fff"><path d="M60.1 4.9A58.5 58.5 0 0045.4.2a.2.2 0 00-.2.1 40.8 40.8 0 00-1.8 3.7 54 54 0 00-16.2 0A37.3 37.3 0 0025.4.3a.2.2 0 00-.2-.1A58.4 58.4 0 0010.5 4.9a.2.2 0 00-.1.1C1.5 18.7-.9 32.2.3 45.5v.1a58.7 58.7 0 0017.7 9 .2.2 0 00.3-.1 42 42 0 003.6-5.9.2.2 0 00-.1-.3 38.7 38.7 0 01-5.5-2.6.2.2 0 01 0-.4l1.1-.9a.2.2 0 01.2 0 41.9 41.9 0 0035.6 0 .2.2 0 01.2 0l1.1.9a.2.2 0 010 .3 36.3 36.3 0 01-5.5 2.7.2.2 0 00-.1.3 47.2 47.2 0 003.6 5.8.2.2 0 00.3.1A58.5 58.5 0 0070.3 45.6v-.1C71.8 30.1 67.8 16.7 60.2 5a.2.2 0 00-.1-.1zM23.7 37.3c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.2 6.4 7.2c0 4-2.9 7.2-6.4 7.2zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.2 6.4 7.2c0 4-2.8 7.2-6.4 7.2z"/></svg>';
+    h += 'LOGIN WITH DISCORD</button>';
+    h += '<div style="text-align:center;color:#555;font-size:11px;padding:2px">\u2014 OR USE EMAIL \u2014</div>';
+    // Tab toggle
+    h += '<div style="display:flex;gap:0;margin-bottom:4px">';
+    h += '<button id="authTabLogin" class="nav-tab active" style="flex:1;font-size:12px;padding:6px" onclick="authSwitchTab(\'login\')">LOGIN</button>';
+    h += '<button id="authTabRegister" class="nav-tab" style="flex:1;font-size:12px;padding:6px" onclick="authSwitchTab(\'register\')">REGISTER</button>';
+    h += '</div>';
+    // Fields
+    h += '<div id="authRegisterFields" style="display:none"><label style="font-size:9px;color:#666;letter-spacing:1px">DISPLAY NAME</label>';
+    h += '<input id="authName" type="text" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:8px 10px;outline:none;box-sizing:border-box" placeholder="Your character name"></div>';
+    h += '<label style="font-size:9px;color:#666;letter-spacing:1px">EMAIL</label>';
+    h += '<input id="authEmail" type="email" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:8px 10px;outline:none;box-sizing:border-box" placeholder="email@example.com">';
+    h += '<label style="font-size:9px;color:#666;letter-spacing:1px">PASSWORD</label>';
+    h += '<input id="authPass" type="password" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:8px 10px;outline:none;box-sizing:border-box" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" onkeydown="if(event.key===\'Enter\')authDoLogin()">';
+    h += '<button class="btn primary" style="font-size:13px;padding:8px 24px;width:100%" onclick="authDoLogin()" id="authSubmitBtn">LOGIN</button>';
+    h += '<div id="authStatus" style="font-size:11px;color:#555;min-height:16px"></div>';
+    // Invite code for registration
+    h += '<div id="authInviteArea" style="display:none;background:#0a0a14;border:1px solid #2a2a44;padding:10px;margin-top:4px">';
+    h += '<div style="font-size:10px;color:#888;margin-bottom:4px">Have a guild invite code? Enter it to auto-join after registering.</div>';
+    h += '<input id="authRegInvite" type="text" style="width:100%;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid var(--neon-orange);color:var(--neon-orange);padding:6px 8px;outline:none;text-transform:uppercase;box-sizing:border-box" placeholder="INVITE CODE (optional)">';
+    h += '</div>';
+    h += '</div>';
+  }
+  
+  // Supabase config (bottom)
+  if (!SUPABASE_URL) {
+    h += '<div style="padding:10px 20px;border-top:1px solid #2a2a44;background:#0a0a14">';
+    h += '<details><summary style="font-size:9px;color:#555;cursor:pointer">DATABASE SETUP (one time)</summary>';
+    h += '<div style="padding:8px 0;display:flex;flex-direction:column;gap:6px">';
+    h += '<div style="font-size:10px;color:#888">Create a free <a href="https://supabase.com/dashboard" target="_blank" style="color:var(--neon-cyan)">Supabase</a> project, run the schema SQL, paste URL + anon key below.</div>';
+    h += '<input id="authSupaUrl" type="text" style="width:100%;font-size:11px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:5px 8px;outline:none;box-sizing:border-box" placeholder="https://xxxxx.supabase.co">';
+    h += '<input id="authSupaKey" type="text" style="width:100%;font-size:11px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:5px 8px;outline:none;box-sizing:border-box" placeholder="eyJhbGci... (anon key)">';
+    h += '<button class="btn" style="font-size:10px;padding:4px 12px" onclick="authSaveSupabase()">SAVE & CONNECT</button>';
+    h += '</div></details></div>';
+  }
+  
+  h += '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', h);
+}
+
+function authSwitchTab(tab) {
+  var loginTab = document.getElementById('authTabLogin');
+  var regTab = document.getElementById('authTabRegister');
+  var regFields = document.getElementById('authRegisterFields');
+  var invArea = document.getElementById('authInviteArea');
+  var btn = document.getElementById('authSubmitBtn');
+  if (tab === 'register') {
+    loginTab.classList.remove('active'); regTab.classList.add('active');
+    regFields.style.display = 'block'; invArea.style.display = 'block';
+    btn.textContent = 'CREATE ACCOUNT';
+  } else {
+    regTab.classList.remove('active'); loginTab.classList.add('active');
+    regFields.style.display = 'none'; invArea.style.display = 'none';
+    btn.textContent = 'LOGIN';
+  }
+}
+
+async function authDoLogin() {
+  var status = document.getElementById('authStatus');
+  var email = document.getElementById('authEmail').value.trim();
+  var pass = document.getElementById('authPass').value;
+  if (!email || !pass) { if (status) status.innerHTML = '<span style="color:var(--neon-red)">Enter email and password</span>'; return; }
+  
+  var isRegister = document.getElementById('authTabRegister').classList.contains('active');
+  if (status) status.innerHTML = '<span style="color:var(--neon-cyan)">'+(isRegister?'Creating account...':'Logging in...')+'</span>';
+  
+  try {
+    if (!_sb && !initSupabase()) throw new Error('Database not configured \u2014 expand Database Setup below');
+    if (isRegister) {
+      var name = document.getElementById('authName').value.trim() || email.split('@')[0];
+      await authRegister(email, pass, name);
+      // Auto-join guild if invite code provided
+      var invCode = document.getElementById('authRegInvite').value.trim();
+      if (invCode) {
+        try { await useInviteCode(invCode); toast('\u2705 Joined guild!'); } 
+        catch(e) { toast('\u26a0 Registered but invite failed: ' + e.message); }
+      }
+      toast('\u2705 Account created! Check email to confirm.');
+    } else {
+      await authLogin(email, pass);
+      toast('\u2705 Logged in!');
+    }
+    document.getElementById('authPanel').remove();
+    openLoginPanel(); // Reopen to show logged-in view
+    updateAuthUI();
+  } catch(e) {
+    if (status) status.innerHTML = '<span style="color:var(--neon-red)">' + (e.message||'Failed') + '</span>';
+  }
+}
+
+async function authDoLogout() {
+  await authLogout();
+  document.getElementById('authPanel').remove();
+  updateAuthUI();
+  toast('Logged out');
+}
+
+async function authSocialLogin(provider) {
+  if (!_sb && !initSupabase()) { toast('Database not configured'); return; }
+  var result = await _sb.auth.signInWithOAuth({
+    provider: provider,
+    options: { redirectTo: window.location.origin + window.location.pathname }
+  });
+  if (result.error) toast('\u274c ' + result.error.message);
+}
+
+async function authGenInvite(role) {
+  var el = document.getElementById('authInviteResult');
+  try {
+    var code = await generateInviteCode(role);
+    if (el) el.innerHTML = '<span style="color:var(--neon-green);font-size:13px;font-weight:900">INVITE CODE: <span style="color:var(--neon-orange);font-size:16px;letter-spacing:3px;cursor:pointer" onclick="navigator.clipboard.writeText(\''+code+'\');toast(\'Copied!\')">'+code+'</span></span><br><span style="color:#888;font-size:9px">Expires in 7 days \u2022 Click code to copy \u2022 Role: '+role.toUpperCase()+'</span>';
+  } catch(e) {
+    if (el) el.innerHTML = '<span style="color:var(--neon-red)">'+e.message+'</span>';
+  }
+}
+
+async function authJoinGuild() {
+  var code = document.getElementById('authInviteInput').value.trim();
+  if (!code) { toast('Enter an invite code'); return; }
+  try {
+    var guild = await useInviteCode(code);
+    toast('\u2705 Joined ' + guild.name + '!');
+    document.getElementById('authPanel').remove();
+    openLoginPanel();
+    updateAuthUI();
+  } catch(e) { toast('\u274c ' + e.message); }
+}
+
+function authShowCreateGuild() {
+  var area = document.getElementById('authCreateArea');
+  if (!area) return;
+  area.innerHTML = '<div style="background:#0a0a14;border:1px solid var(--neon-cyan);padding:12px;margin-top:6px">' +
+    '<div style="font-weight:900;color:var(--neon-cyan);font-size:11px;margin-bottom:6px">CREATE GUILD</div>' +
+    '<input id="authNewGuildName" type="text" style="width:100%;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:6px 8px;outline:none;margin-bottom:6px;box-sizing:border-box" placeholder="Guild name">' +
+    '<input id="authNewGuildServer" type="text" style="width:100%;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:6px 8px;outline:none;margin-bottom:6px;box-sizing:border-box" placeholder="Server name">' +
+    '<input id="authNewGuildWclId" type="text" style="width:100%;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:6px 8px;outline:none;margin-bottom:6px;box-sizing:border-box" placeholder="WCL Guild ID">' +
+    '<button class="btn primary" style="font-size:12px;padding:6px 16px" onclick="authDoCreateGuild()">CREATE</button></div>';
+}
+
+async function authDoCreateGuild() {
+  var name = document.getElementById('authNewGuildName').value.trim();
+  var server = document.getElementById('authNewGuildServer').value.trim();
+  var wclId = document.getElementById('authNewGuildWclId').value.trim();
+  if (!name) { toast('Enter a guild name'); return; }
+  try {
+    await createGuild(name, server, wclId);
+    toast('\u2705 Guild created! You are the GM.');
+    document.getElementById('authPanel').remove();
+    openLoginPanel();
+    updateAuthUI();
+  } catch(e) { toast('\u274c ' + e.message); }
+}
+
+function authSaveSupabase() {
+  var url = document.getElementById('authSupaUrl').value.trim();
+  var key = document.getElementById('authSupaKey').value.trim();
+  if (!url || !key) { toast('Enter both Supabase URL and anon key'); return; }
+  SUPABASE_URL = url; SUPABASE_KEY = key;
+  localStorage.setItem('ubiq_supabase_url', url);
+  localStorage.setItem('ubiq_supabase_key', key);
+  if (initSupabase()) {
+    toast('\u2705 Database connected!');
+    document.getElementById('authPanel').remove();
+    openLoginPanel();
+  } else { toast('\u274c Failed to initialize \u2014 check URL and key'); }
+}
+
+// Update header to show login state
+function updateAuthUI() {
+  var btn = document.getElementById('authHeaderBtn');
+  if (!btn) return;
+  if (_user) {
+    var name = (_user.user_metadata && _user.user_metadata.display_name) || _user.email.split('@')[0];
+    btn.innerHTML = '\ud83d\udc64 ' + name;
+    btn.style.borderColor = 'var(--neon-green)';
+    btn.style.color = 'var(--neon-green)';
+  } else {
+    btn.innerHTML = '\ud83d\udd10 LOGIN';
+    btn.style.borderColor = 'var(--neon-cyan)';
+    btn.style.color = 'var(--neon-cyan)';
+  }
+}
+
+
 // PASTE EXTRACTED DATA HERE
 // ═══════════════════════════════════════════
 
@@ -2886,6 +3264,27 @@ function openSetupPanel() {
   h += '</div>';
   
   h += '<div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px">';
+  
+  // ── RESTORE FROM CLOUD (prominent when nothing configured) ──
+  if (!allGood) {
+    h += '<div style="background:#0a0a14;border:2px solid var(--neon-cyan);padding:14px">';
+    h += '<div style="font-weight:900;color:var(--neon-cyan);font-size:14px;letter-spacing:1px;margin-bottom:8px">\ud83d\udd04 ALREADY SET UP? RESTORE FROM CLOUD</div>';
+    h += '<div style="font-size:11px;color:var(--text-sub);margin-bottom:10px">If you\u2019ve used this before, paste your Gist ID and GitHub Token to restore everything (WCL credentials, roster, assignments).</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+    h += '<div><label style="font-size:9px;color:var(--neon-cyan);letter-spacing:1px">GIST ID</label><input id="sp_restoreGist" type="text" style="width:100%;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid var(--neon-cyan);color:var(--neon-cyan);padding:6px 8px;outline:none;box-sizing:border-box" placeholder="74815c441de167a3c2e5..."></div>';
+    h += '<div><label style="font-size:9px;color:var(--neon-cyan);letter-spacing:1px">GITHUB TOKEN</label><input id="sp_restoreToken" type="password" style="width:100%;font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid var(--neon-cyan);color:var(--neon-cyan);padding:6px 8px;outline:none;box-sizing:border-box" placeholder="ghp_..."></div>';
+    h += '</div>';
+    h += '<button class="btn primary" style="font-size:13px;padding:8px 24px;width:100%" onclick="spRestore()">\ud83d\udd04 RESTORE EVERYTHING</button>';
+    h += '<div id="sp_restoreStatus" style="margin-top:4px;font-size:10px;color:#555"></div>';
+    h += '</div>';
+    h += '<div style="text-align:center;color:#555;font-size:11px;font-family:Share Tech Mono,monospace;padding:4px">\u2014 OR SET UP NEW BELOW \u2014</div>';
+  } else {
+    h += '<div style="background:rgba(0,255,136,0.05);border:1px solid var(--neon-green);padding:10px 14px;display:flex;align-items:center;gap:8px">';
+    h += '<span style="font-size:13px">\u2705</span>';
+    h += '<span style="font-size:12px;color:var(--neon-green);font-weight:700">All configured. Gist: '+cfg.gistId.substring(0,8)+'...</span>';
+    h += '<button class="btn" style="font-size:10px;padding:3px 10px;margin-left:auto;border-color:var(--neon-cyan);color:var(--neon-cyan)" onclick="spCopyCredentials()">SAVE MY CREDENTIALS</button>';
+    h += '</div>';
+  }
   
   // ── STEP 1: WCL ──
   h += '<div style="background:#0a0a14;border:1px solid '+(hasWcl?'var(--neon-green)':'var(--neon-orange)')+';padding:14px">';
@@ -6985,19 +7384,24 @@ function analyzePerformance(playerName, bossName) {
     }
   });
 
-  // ── BUFF UPTIME ──
+  // ── BUFF UPTIME (only actionable buffs the player controls) ──
+  var RAID_BUFFS_SKIP = ['Bloodlust','Heroism','Greater Blessing','Prayer of','Gift of the Wild','Mark of the Wild','Arcane Brilliance','Arcane Intellect','Battle Shout','Commanding Shout','Ferocious Inspiration','Blessing of','Leader of the Pack','Moonkin Aura','Totem','Devotion Aura','Retribution Aura','Concentration Aura','Sanctity Aura','Shadow Resistance Aura','Fire Resistance Aura','Frost Resistance Aura','Trueshot Aura','Inspiration','Power Infusion','Innervate','Lifebloom','Renew','Rejuvenation','Regrowth','Prayer of Mending','Earth Shield','Power Word: Shield','Battle Squawk','Drums of','Shadow Word:','Vampiric','Grace of Air','Windfury','Wrath of Air','Mana Spring','Strength of Earth','Brilliance Aura','Improved','Braided Eternium','Noggenfogger','Nightmare Seed','Lesser Spell Blas','Fungal Frenzy','Spirit Tap'];
   Object.keys(aBuff).forEach(function(name) {
-    if (name.indexOf('Bloodlust')!==-1||name.indexOf('Heroism')!==-1) return;
+    var skip = false;
+    RAID_BUFFS_SKIP.forEach(function(pat) { if (name.indexOf(pat) !== -1) skip = true; });
+    if (skip) return;
     var avg = aBuff[name];
     var mine = myBuffMap[name];
     var myUp = mine && my.totalTime > 0 ? Math.round((mine.totalUptime||0)/my.totalTime*100) : 0;
     var diff = avg.up - myUp;
     if (diff > 15 && avg.up > 25) {
-      var est = Math.round(diff * 0.5); // rough DPS estimate from buff uptime
+      var est = Math.round(diff * 0.5);
+      var isConsumable = name.indexOf('Flask')!==-1||name.indexOf('Elixir')!==-1||name.indexOf('Well Fed')!==-1||name.indexOf('Oil')!==-1||name.indexOf('Potion')!==-1||name.indexOf('Scroll')!==-1||name.indexOf('Destruction')!==-1;
+      var tip = myUp===0 ? (isConsumable ? 'You\u2019re not using this consumable. Buy and use it before every pull.' : 'Completely missing \u2014 check if this is a self-buff or trinket proc you should have.') : 'Maintain better uptime.';
       insights.push({ priority: diff, estGain: est, html:
-        '<td style="color:var(--neon-green)">\u2b06 Buff Uptime</td>'+
+        '<td style="color:var(--neon-green)">\u2b06 '+(isConsumable?'Consumable':'Buff')+'</td>'+
         '<td><span style="color:var(--text-bright)">'+name+'</span></td>'+
-        '<td>Your uptime: <b>'+myUp+'%</b>. Ranked avg: <b>'+avg.up+'%</b>. '+(myUp===0?'You\u2019re <b style="color:var(--neon-red)">completely missing</b> this buff \u2014 coordinate with your raid support.':'Aim to maintain this buff more consistently.')+'</td>'+
+        '<td>Your uptime: <b>'+myUp+'%</b>. Ranked avg: <b>'+avg.up+'%</b> (+'+diff+'%). '+tip+'</td>'+
         '<td style="color:var(--neon-green);font-weight:900;text-align:right">~+'+est+'</td>'
       });
     }
@@ -7517,6 +7921,11 @@ function init() {
   renderRaidTabs();
   renderBossTabs();
   renderBoss();
+  
+  // Auto-login check
+  if (initSupabase()) {
+    authGetSession().then(function() { updateAuthUI(); }).catch(function(){});
+  }
   
   // Always fetch fresh roster from WCL on load
   var cfg = getGuildConfig();
