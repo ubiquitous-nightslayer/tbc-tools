@@ -962,7 +962,38 @@ async function authGenInvite(role) {
   var el = document.getElementById('authInviteResult');
   try {
     var code = await generateInviteCode(role);
-    if (el) el.innerHTML = '<span style="color:var(--neon-green);font-size:13px;font-weight:900">INVITE CODE: <span style="color:var(--neon-orange);font-size:16px;letter-spacing:3px;cursor:pointer" onclick="navigator.clipboard.writeText(\''+code+'\');toast(\'Copied!\')">'+code+'</span></span><br><span style="color:#888;font-size:9px">Expires in 7 days \u2022 Click code to copy \u2022 Role: '+role.toUpperCase()+'</span>';
+    var guildName = _guild ? _guild.name : 'the guild';
+    var siteUrl = window.location.origin + window.location.pathname;
+    var roleUpper = role.toUpperCase();
+    
+    // Build the copy-paste message
+    var msg = '═══ ' + guildName + ' \u2014 TBC Assignment Sheet ═══\n\n';
+    msg += 'You\u2019ve been invited as ' + roleUpper + '.\n\n';
+    msg += 'STEP 1: Go to the site:\n' + siteUrl + '\n\n';
+    msg += 'STEP 2: Click the \ud83d\udd10 LOGIN button (top right toolbar)\n\n';
+    msg += 'STEP 3: Click "LOGIN WITH DISCORD" (big purple button)\n\n';
+    msg += 'STEP 4: After logging in, enter this invite code:\n\n';
+    msg += '    \ud83c\udf9f  ' + code + '\n\n';
+    msg += 'STEP 5: Click JOIN. Done! Everything loads automatically.\n\n';
+    msg += 'Code expires in 7 days. \u2022 Role: ' + roleUpper;
+    
+    // Show modal with the message
+    var h = '<div id="inviteModal" style="position:fixed;inset:0;background:rgba(5,5,20,0.95);z-index:400;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">';
+    h += '<div style="background:#111118;border:2px solid var(--neon-green);width:550px;max-width:95vw;padding:24px">';
+    h += '<div style="font-family:Orbitron,sans-serif;font-size:14px;color:var(--neon-green);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">';
+    h += '<span>\ud83c\udf9f ' + roleUpper + ' INVITE READY</span>';
+    h += '<button onclick="document.getElementById(\'inviteModal\').remove()" style="background:none;border:none;color:#ff2244;font-size:20px;cursor:pointer">\u00d7</button>';
+    h += '</div>';
+    h += '<div style="font-size:12px;color:var(--text-sub);margin-bottom:10px">Copy this entire message and DM it to the person on Discord:</div>';
+    h += '<textarea id="inviteMsg" readonly onclick="this.select()" style="width:100%;height:220px;font-size:12px;font-family:Share Tech Mono,monospace;background:#0a0a14;border:2px solid var(--neon-green);color:var(--neon-green);padding:12px;resize:none;outline:none;box-sizing:border-box;line-height:1.6">' + msg + '</textarea>';
+    h += '<div style="display:flex;gap:8px;margin-top:12px">';
+    h += '<button class="btn primary" style="font-size:13px;padding:8px 24px;flex:1" onclick="navigator.clipboard.writeText(document.getElementById(\'inviteMsg\').value);toast(\'\u2705 Copied! Paste it in Discord.\')">COPY MESSAGE</button>';
+    h += '<button class="btn" style="font-size:11px;padding:8px 16px" onclick="document.getElementById(\'inviteModal\').remove()">CLOSE</button>';
+    h += '</div>';
+    h += '<div style="margin-top:8px;font-size:10px;color:#555;text-align:center">Code: <span style="color:var(--neon-orange);font-weight:900;letter-spacing:2px">'+code+'</span> \u2022 Expires in 7 days \u2022 Role: '+roleUpper+'</div>';
+    h += '</div></div>';
+    document.body.insertAdjacentHTML('beforeend', h);
+    
   } catch(e) {
     if (el) el.innerHTML = '<span style="color:var(--neon-red)">'+e.message+'</span>';
   }
