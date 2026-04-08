@@ -60,7 +60,7 @@ body { background:var(--bg-dark); color:var(--text); font-family:'Rajdhani',sans
 .saved-key-item .key-date { color:var(--text-sub); font-size:10px; font-family:'Share Tech Mono',monospace; }
 
 /* ═══ TABS ═══ */
-.raid-tabs { display:flex; gap:0; padding:0 20px; background:var(--bg-panel); border-bottom:1px solid var(--border); overflow-x:auto; scrollbar-width:none; }
+.raid-tabs { display:flex; gap:0; padding:0 20px; background:var(--bg-panel); border-bottom:1px solid var(--border); overflow:visible; flex-wrap:wrap; }
 .raid-tabs::-webkit-scrollbar { display:none; }
 .raid-tab { font-family:'Share Tech Mono',monospace; font-size:13px; padding:10px 16px; background:transparent; border:none; border-bottom:2px solid transparent; color:var(--text-sub); cursor:pointer; white-space:nowrap; letter-spacing:1px; text-transform:uppercase; transition:all .2s; }
 .raid-tab:hover { color:var(--text); }
@@ -8357,18 +8357,21 @@ function init() {
 // RENDER
 // ═══════════════════════════════════════════
 function renderRaidTabs() {
+  var raid = RAIDS[currentRaid];
+  var currentBossName = raid ? raid.bosses[currentBoss].name : '';
   document.getElementById('raidTabs').innerHTML = RAIDS.map((r, i) => `
-    <div class="toolbar-group" style="position:relative">
-      <button class="raid-tab ${i===currentRaid?'active':''}" onclick="if(currentRaid===${i}){toggleRaidDrop(this)}else{currentRaid=${i};currentBoss=0;renderRaidTabs();renderBossTabs();renderBoss();}">
-        ${r.name}<span class="tier-badge ${r.tierClass}">${r.tier}·${r.size}p</span>
+    <div style="position:relative">
+      <button class="raid-tab ${i===currentRaid?'active':''}" onclick="event.stopPropagation();if(currentRaid===${i}){toggleRaidDrop(this)}else{currentRaid=${i};currentBoss=0;renderRaidTabs();renderBossTabs();renderBoss();}">
+        ${r.name}<span class="tier-badge ${r.tierClass}">${r.tier}·${r.size}p</span>${i===currentRaid ? '<span style="color:var(--neon-cyan);font-size:10px;margin-left:6px">\u25BE '+currentBossName+'</span>' : ''}
       </button>
       ${i===currentRaid ? '<div class="raid-boss-dropdown" id="raidBossDrop">' + r.bosses.map((b, bi) => `
-        <button class="toolbar-drop-item ${bi===currentBoss?'style=color:var(--neon-cyan);font-weight:900':''}" onclick="currentBoss=${bi};closeAllDropdowns();renderRaidTabs();renderBossTabs();renderBoss()">${b.name}</button>
+        <button class="toolbar-drop-item" style="${bi===currentBoss?'color:var(--neon-cyan);font-weight:900':''}" onclick="event.stopPropagation();currentBoss=${bi};closeAllDropdowns();renderRaidTabs();renderBossTabs();renderBoss()">${b.name}</button>
       `).join('') + '</div>' : ''}
     </div>
   `).join('');
 }
 function toggleRaidDrop(btn) {
+  event.stopPropagation();
   var drop = btn.nextElementSibling;
   if (!drop) return;
   var vis = drop.style.display === 'block';
