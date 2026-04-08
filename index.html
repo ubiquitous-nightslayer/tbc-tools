@@ -7552,41 +7552,171 @@ function analyzePerformance(playerName, bossName) {
           Object.keys(aDmg).forEach(function(name){var avg=aDmg[name];var mine=myDmgMap[name];if(!mine||!avg)return;var myAbDps=Math.round((mine.total||0)/myFS);var dd=avg.dps-myAbDps;if(dd>20&&avg.dps>50){if(!aCast[name]||!myCastMap[name]||Math.abs(aCast[name].cpm-(myCastMap[name].total/myFM))<0.5){var myH=(mine.hitCount||0)+(mine.critHitCount||0)+(mine.tickCount||0)+(mine.critTickCount||0);var myCr=myH>0?Math.round(((mine.critHitCount||0)+(mine.critTickCount||0))/myH*100):0;var avgCr=avg.hits>0?Math.round(avg.crits/avg.hits*100):0;insights.push({priority:dd,estGain:dd,html:'<td style="color:var(--neon-purple)">\u2694 Damage Gap</td><td><span style="color:var(--text-bright)">'+name+'</span></td><td>You: '+myAbDps+' DPS ('+myCr+'% crit). Top 100: '+avg.dps+' DPS ('+avgCr+'% crit).'+(avg.hits-myH>2?' They land <b>'+(avg.hits-myH)+' more hits</b>.':'')+'</td><td style="color:var(--neon-green);font-weight:900;text-align:right">+'+dd+'</td>'});}}});
         }
 
-        // ═══ HEALER-SPECIFIC ANALYSIS ═══
+        // ═══ HEALER-SPECIFIC DEEP DIVE ═══
         if (role === 'healer') {
-          var myTotalH=0,myOH=0;(my.healDone||[]).forEach(function(e){myTotalH+=e.total||0;myOH+=(e.overheal||0);});
+          var myTotalH=0,myOH=0;
+          (my.healDone||[]).forEach(function(e){myTotalH+=e.total||0;myOH+=(e.overheal||0);});
           var myOHpct = (myTotalH+myOH)>0 ? Math.round(myOH/(myTotalH+myOH)*100) : 0;
           
-          // Overhealing comparison
-          if (myOHpct > aOverheal + 10) {
-            insights.push({priority:200,estGain:0,html:'<td style="color:var(--neon-red)">\ud83d\udca7 Overhealing</td><td><span style="color:var(--text-bright)">Efficiency</span></td><td>Your overheal: <b style="color:var(--neon-red)">'+myOHpct+'%</b>. Top 100 avg: <b>'+aOverheal+'%</b>. Wasted healing = wasted mana. Downrank spells or time heals better.</td><td style="color:#888;text-align:right">EFFICIENCY</td>'});
+          // Total overhealing comparison
+          if (myOHpct > aOverheal + 8) {
+            insights.push({priority:200,estGain:0,html:'<td style="color:var(--neon-red)">\ud83d\udca7 Overhealing</td><td><span style="color:var(--text-bright)">Total Efficiency</span></td><td>Your overheal: <b style="color:var(--neon-red)">'+myOHpct+'%</b>. Top 100 avg: <b>'+aOverheal+'%</b>. That\u2019s <b>'+fmtK(myOH)+'</b> wasted healing = wasted mana. Downrank spells, cancel-cast, or pre-hot less.</td><td style="color:var(--neon-red);font-weight:900;text-align:right">EFFICIENCY</td>'});
           }
-          // Heal spell usage comparison
-          Object.keys(aHeal).forEach(function(name){
-            var avg=aHeal[name]; var mine=myHealMap[name];
-            var myHps = mine ? Math.round((mine.total||0)/myFS) : 0;
-            var diff = avg.hps - myHps;
-            if (diff > 20 && avg.hps > 30) {
-              insights.push({priority:diff,estGain:diff,html:'<td style="color:var(--neon-green)">\ud83d\udc9a Heal Gap</td><td><span style="color:var(--text-bright)">'+name+'</span></td><td>You: <b>'+myHps+'</b> HPS ('+fmtK(mine?mine.total:0)+' total). Top 100: <b>'+avg.hps+'</b> HPS ('+fmtK(avg.total)+' total).</td><td style="color:var(--neon-green);font-weight:900;text-align:right">+'+diff+'</td>'});
+
+          // ── Per-spell HPS comparison (your spell vs their spell) ──
+          var healSpells = {};
+          // Collect all heal spells from both you and top 100
+          Object.keys(aHeal).forEach(function(name){ healSpells[name] = true; });
+          Object.keys(myHealMap).forEach(function(name){ healSpells[name] = true; });
+          
+          Object.keys(healSpells).sort(function(a,b){
+            var aH = aHeal[a] ? aHeal[a].hps : 0;
+            var bH = aHeal[b] ? aHeal[b].hps : 0;
+            return bH - aH;
+          }).forEach(function(name){
+            var avg = aHeal[name];
+            var mine = myHealMap[name];
+            if (!avg && !mine) return;
+            
+            var mySpellHps = mine ? Math.round((mine.total||0)/myFS) : 0;
+            var avgSpellHps = avg ? avg.hps : 0;
+            var mySpellTotal = mine ? (mine.total||0) : 0;
+            var avgSpellTotal = avg ? avg.total : 0;
+            
+            // My overhealing for this spell
+            var mySpellOH = mine ? (mine.overheal||0) : 0;
+            var mySpellOHpct = (mySpellTotal+mySpellOH) > 0 ? Math.round(mySpellOH/(mySpellTotal+mySpellOH)*100) : 0;
+            // Avg overhealing for this spell
+            var avgSpellOH = avg ? avg.overheal : 0;
+            var avgSpellOHpct = (avgSpellTotal+avgSpellOH) > 0 ? Math.round(avgSpellOH/(avgSpellTotal+avgSpellOH)*100) : 0;
+            
+            // My casts/crit for this spell
+            var myHits = mine ? ((mine.hitCount||0)+(mine.critHitCount||0)+(mine.tickCount||0)+(mine.critTickCount||0)) : 0;
+            var myCrits = mine ? ((mine.critHitCount||0)+(mine.critTickCount||0)) : 0;
+            var myCritPct = myHits > 0 ? Math.round(myCrits/myHits*100) : 0;
+            var avgCritPct = avg && avg.hits > 0 ? Math.round(avg.crits/avg.hits*100) : 0;
+            
+            // My CPM for this spell
+            var myCastEntry = myCastMap[name];
+            var myCpm = myCastEntry && myFM > 0 ? +(myCastEntry.total/myFM).toFixed(1) : 0;
+            var myCasts = myCastEntry ? myCastEntry.total : 0;
+            var avgCastEntry = aCast[name];
+            var avgCpm = avgCastEntry ? avgCastEntry.cpm : 0;
+            var avgCasts = avgCastEntry ? avgCastEntry.total : 0;
+            
+            // Avg heal per cast
+            var myHPC = myCasts > 0 ? Math.round(mySpellTotal/myCasts) : 0;
+            var avgHPC = avgCasts > 0 ? Math.round(avgSpellTotal/avgCasts) : 0;
+            
+            // ── MISSING HEAL SPELL ──
+            if (!mine && avg && avgSpellHps > 15) {
+              var detail = 'Never used. Top 100: <b>'+avgSpellHps+'</b> HPS, <b>'+avgCasts+'</b> casts ('+avgCpm+' CPM), '+fmtK(avgSpellTotal)+' total healing, '+avgCritPct+'% crit, '+avgSpellOHpct+'% overheal.';
+              if (avgHPC > 0) detail += ' Avg heal per cast: <b>'+fmtK(avgHPC)+'</b>.';
+              insights.push({priority:avgSpellHps*2,estGain:avgSpellHps,html:
+                '<td style="color:var(--neon-red)">\u274c Missing Heal</td>'+
+                '<td><span style="color:var(--text-bright)">'+name+'</span></td>'+
+                '<td>'+detail+'</td>'+
+                '<td style="color:var(--neon-green);font-weight:900;text-align:right">+'+avgSpellHps+'</td>'
+              });
+              return;
+            }
+            
+            // ── HPS GAP (you use it, they use it, theirs is bigger) ──
+            var hpsDiff = avgSpellHps - mySpellHps;
+            if (mine && avg && hpsDiff > 15 && avgSpellHps > 20) {
+              var detail = 'You: <b>'+mySpellHps+'</b> HPS ('+fmtK(mySpellTotal)+' total, '+myCasts+' casts, '+myCpm+' CPM, '+myCritPct+'% crit, '+mySpellOHpct+'% OH). ';
+              detail += 'Top 100: <b>'+avgSpellHps+'</b> HPS ('+fmtK(avgSpellTotal)+' total, '+avgCasts+' casts, '+avgCpm+' CPM, '+avgCritPct+'% crit, '+avgSpellOHpct+'% OH).';
+              
+              // Diagnose WHY the gap exists
+              var diagnosis = [];
+              var castDiff = avgCasts - myCasts;
+              if (castDiff > 2) diagnosis.push('They cast it <b>'+castDiff+' more times</b>');
+              if (avgCritPct - myCritPct > 8) diagnosis.push('Crit rate <b>'+Math.round(avgCritPct-myCritPct)+'% higher</b> (gear/talents)');
+              if (avgHPC > myHPC * 1.15 && myHPC > 0) diagnosis.push('Avg heal per cast <b>'+fmtK(avgHPC)+'</b> vs yours <b>'+fmtK(myHPC)+'</b> (spell rank/+heal)');
+              if (mySpellOHpct > avgSpellOHpct + 10) diagnosis.push('<span style="color:var(--neon-red)">Your overheal '+mySpellOHpct+'% vs their '+avgSpellOHpct+'%</span> \u2014 timing issue');
+              if (diagnosis.length) detail += '<br>\u2192 ' + diagnosis.join('. ');
+              
+              insights.push({priority:hpsDiff,estGain:hpsDiff,html:
+                '<td style="color:var(--neon-green)">\ud83d\udc9a Heal Gap</td>'+
+                '<td><span style="color:var(--text-bright)">'+name+'</span></td>'+
+                '<td>'+detail+'</td>'+
+                '<td style="color:var(--neon-green);font-weight:900;text-align:right">+'+hpsDiff+'</td>'
+              });
+              return;
+            }
+            
+            // ── PER-SPELL OVERHEALING (you overheal way more on this spell) ──
+            if (mine && avg && mySpellOHpct > avgSpellOHpct + 15 && mySpellTotal > 5000 && myCasts > 3) {
+              var wastedHeal = Math.round(mySpellOH - (avgSpellOHpct/100 * (mySpellTotal + mySpellOH)));
+              insights.push({priority:Math.round(mySpellOHpct - avgSpellOHpct),estGain:0,html:
+                '<td style="color:var(--neon-orange)">\ud83d\udca7 Overheal: '+name+'</td>'+
+                '<td><span style="color:var(--text-bright)">'+mySpellOHpct+'% vs '+avgSpellOHpct+'%</span></td>'+
+                '<td>Your '+name+' overheals <b>'+mySpellOHpct+'%</b> vs top 100 <b>'+avgSpellOHpct+'%</b>. That\u2019s <b>'+fmtK(wastedHeal)+'</b> wasted healing. '+(mySpellOHpct>60?'Consider downranking or casting a different spell.':'Time your casts better \u2014 pre-hotting too early or sniping heals.')+'</td>'+
+                '<td style="color:var(--neon-orange);font-weight:900;text-align:right">OVERHEAL</td>'
+              });
+            }
+            
+            // ── CAST FREQUENCY (you cast it much less often) ──
+            if (mine && avg && avgCpm - myCpm > 0.4 && avgCpm > 0.3 && avgSpellHps > 10) {
+              var missedCasts = Math.round((avgCpm - myCpm) * myFM);
+              var estGainFromCasts = myFS > 0 && avgHPC > 0 ? Math.round(missedCasts * avgHPC * (1 - avgSpellOHpct/100) / myFS) : 0;
+              insights.push({priority:missedCasts * 3,estGain:estGainFromCasts,html:
+                '<td style="color:var(--neon-cyan)">\u26a1 Cast Freq: '+name+'</td>'+
+                '<td><span style="color:var(--text-bright)">'+myCpm+' \u2192 '+avgCpm+' CPM</span></td>'+
+                '<td>You: <b>'+myCasts+'</b> casts ('+myCpm+' CPM). Top 100: <b>'+avgCasts+'</b> casts ('+avgCpm+' CPM). Missing <b style="color:var(--neon-orange)">'+missedCasts+' casts</b>.'+(avgHPC>0?' Each heals ~'+fmtK(avgHPC)+' effective.':'')+'</td>'+
+                '<td style="color:var(--neon-green);font-weight:900;text-align:right">'+(estGainFromCasts>0?'+'+estGainFromCasts:'CASTS')+'</td>'
+              });
             }
           });
-          // Missing heal spells
-          Object.keys(aHeal).forEach(function(name){
-            if (!myHealMap[name] && aHeal[name].hps > 20) {
-              insights.push({priority:aHeal[name].hps,estGain:aHeal[name].hps,html:'<td style="color:var(--neon-red)">\u274c Missing Heal</td><td><span style="color:var(--text-bright)">'+name+'</span></td><td>Never used. Top 100: <b>'+aHeal[name].hps+'</b> HPS ('+fmtK(aHeal[name].total)+' total).</td><td style="color:var(--neon-green);font-weight:900;text-align:right">+'+aHeal[name].hps+'</td>'});
+          
+          // ── WASTED GCDs ON NON-HEAL SPELLS ──
+          Object.keys(myCastMap).forEach(function(name){
+            if (isSkip(name)) return;
+            // If you're casting DPS spells that top healers don't, flag it
+            if (!aCast[name] && myCastMap[name].total > 2 && !myHealMap[name] && !aHeal[name]) {
+              insights.push({priority:10,estGain:0,html:
+                '<td style="color:var(--neon-orange)">\u26a0 Wasted GCDs</td>'+
+                '<td><span style="color:var(--text-bright)">'+name+'</span></td>'+
+                '<td>You cast <b>'+myCastMap[name].total+'</b> times but top 100 healers don\u2019t use it. Every GCD on non-heals = someone not getting healed.</td>'+
+                '<td style="color:#888;text-align:right">\u2014</td>'
+              });
             }
           });
-          // Cast frequency for heals
+          
+          // ── ACTIVITY / DOWNTIME ──
+          var myTotalCasts = 0; Object.values(myCastMap).forEach(function(c){myTotalCasts += c.total||0;});
+          var avgTotalCasts = 0; Object.values(aCast).forEach(function(c){avgTotalCasts += c.total||0;});
+          var myCPM = myFM > 0 ? +(myTotalCasts/myFM).toFixed(1) : 0;
+          // Estimate avg CPM from sampled data
+          var avgTotalCPM = 0;
+          comps.forEach(function(c){var tc=0;(c.casts||[]).forEach(function(cc){tc+=cc.total||0;});var cfm=(c.totalTime?c.totalTime/1000:1)/60;avgTotalCPM+=cfm>0?tc/cfm:0;});
+          avgTotalCPM = N>0 ? +(avgTotalCPM/N).toFixed(1) : 0;
+          
+          if (avgTotalCPM > myCPM * 1.15 && myCPM > 0) {
+            insights.push({priority:150,estGain:0,html:
+              '<td style="color:var(--neon-red)">\u23f1 Activity</td>'+
+              '<td><span style="color:var(--text-bright)">Total CPM</span></td>'+
+              '<td>Your total casts: <b>'+myTotalCasts+'</b> ('+myCPM+' CPM). Top 100 avg: <b>'+Math.round(avgTotalCasts)+'</b> ('+avgTotalCPM+' CPM). You have <b>downtime</b> \u2014 always be casting. If nobody needs healing, DPS or refresh HoTs.</td>'+
+              '<td style="color:var(--neon-red);font-weight:900;text-align:right">ACTIVITY</td>'
+            });
+          }
+          
+          // ── DISPELS (if ranked healers dispel more) ──
+          var myDispels = 0, avgDispels = 0;
+          Object.keys(myCastMap).forEach(function(name){
+            if (name.indexOf('Dispel')!==-1||name.indexOf('Cleanse')!==-1||name.indexOf('Purify')!==-1||name.indexOf('Abolish')!==-1||name.indexOf('Cure')!==-1||name.indexOf('Remove')!==-1||name.indexOf('Decursive')!==-1) myDispels += myCastMap[name].total;
+          });
           Object.keys(aCast).forEach(function(name){
-            var avg=aCast[name],mine=myCastMap[name];
-            var myCpm=mine&&myFM>0?+(mine.total/myFM).toFixed(1):0;
-            var diff=avg.cpm-myCpm;
-            // Only show heal-related casts
-            if(diff>0.3 && avg.cpm>0.5 && (aHeal[name] || name.indexOf('Heal')!==-1 || name.indexOf('Rejuv')!==-1 || name.indexOf('Renew')!==-1 || name.indexOf('Shield')!==-1 || name.indexOf('Prayer')!==-1 || name.indexOf('Chain')!==-1 || name.indexOf('Bloom')!==-1)) {
-              var mc=Math.round(diff*myFM);
-              insights.push({priority:mc*5,estGain:0,html:'<td style="color:var(--neon-cyan)">\u26a1 Cast Frequency</td><td><span style="color:var(--text-bright)">'+name+'</span></td><td>You: <b>'+(mine?mine.total:0)+'</b> casts ('+myCpm+' CPM). Top 100: <b>'+avg.total+'</b> ('+avg.cpm+' CPM). Missing <b style="color:var(--neon-orange)">'+mc+'</b> casts.</td><td style="color:var(--neon-cyan);text-align:right">CASTS</td>'});
-            }
+            if (name.indexOf('Dispel')!==-1||name.indexOf('Cleanse')!==-1||name.indexOf('Purify')!==-1||name.indexOf('Abolish')!==-1||name.indexOf('Cure')!==-1||name.indexOf('Remove')!==-1||name.indexOf('Decursive')!==-1) avgDispels += aCast[name].total;
           });
+          if (avgDispels > myDispels + 2 && avgDispels > 1) {
+            insights.push({priority:30,estGain:0,html:
+              '<td style="color:var(--neon-purple)">\ud83e\ude84 Dispels</td>'+
+              '<td><span style="color:var(--text-bright)">'+myDispels+' vs '+avgDispels+'</span></td>'+
+              '<td>You dispelled <b>'+myDispels+'</b> times. Top 100 avg: <b>'+avgDispels+'</b>. Dispels prevent damage = less healing needed later. Prioritize dispelling debuffs.</td>'+
+              '<td style="color:var(--neon-purple);font-weight:900;text-align:right">UTILITY</td>'
+            });
+          }
         }
 
         // ═══ TANK-SPECIFIC ANALYSIS ═══
