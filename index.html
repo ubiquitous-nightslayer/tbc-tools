@@ -5750,7 +5750,7 @@ function renderPerfOverview(pd) {
     h+='<td style="padding:4px;text-align:right;color:'+parseColorForVal(avgP)+'">'+avgP+'%</td>';
     h+='<td style="padding:4px;text-align:right">'+p.count+'</td>';
     h+='<td style="padding:4px;text-align:right;color:'+(p.deaths>0?'#aa3344':'var(--neon-green)')+'">'+p.deaths+'</td>';
-    h+='<td style="padding:4px;text-align:right;color:'+(cv<=10?'var(--neon-green)':(cv<=20?'var(--neon-cyan)':'var(--neon-orange)')+'">±'+cv+'%</td>';
+    h+='<td style="padding:4px;text-align:right;color:'+(cv<=10?'var(--neon-green)':(cv<=20?'var(--neon-cyan)':'var(--neon-orange)'))+'">±'+cv+'%</td>';
     h+='</tr>';
   });
   h+='</tbody></table></div>';
