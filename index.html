@@ -646,7 +646,8 @@ function initSupabase() {
 // ── AUTH FUNCTIONS ──
 async function authRegister(email, password, displayName) {
   if (!_sb) throw new Error('Database not configured');
-  var result = await _sb.auth.signUp({ email: email, password: password, options: { data: { display_name: displayName } } });
+  var siteUrl = window.location.origin + window.location.pathname;
+  var result = await _sb.auth.signUp({ email: email, password: password, options: { data: { display_name: displayName }, emailRedirectTo: siteUrl } });
   if (result.error) throw result.error;
   _user = result.data.user;
   return _user;
@@ -9120,7 +9121,22 @@ function init() {
   
   // Auto-login check
   if (initSupabase()) {
-    authGetSession().then(function() { updateAuthUI(); }).catch(function(){});
+    // Handle email confirmation token_hash from URL (PKCE flow)
+    var urlParams = new URLSearchParams(window.location.search);
+    var tokenHash = urlParams.get('token_hash');
+    var authType = urlParams.get('type');
+    if (tokenHash && authType) {
+      _sb.auth.verifyOtp({ token_hash: tokenHash, type: authType }).then(function(result) {
+        if (result.error) { console.log('Email verify error:', result.error); toast('Email verification failed: ' + result.error.message); }
+        else { _user = result.data.user; toast('\u2705 Email confirmed! Welcome.'); }
+        // Clean URL
+        window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+        updateAuthUI();
+      }).catch(function(e) { console.log('Verify error:', e); });
+    } else {
+      // Normal session restore (also handles #access_token from OAuth redirect)
+      authGetSession().then(function() { updateAuthUI(); }).catch(function(){});
+    }
   }
   
   // Always fetch fresh roster from WCL on load
