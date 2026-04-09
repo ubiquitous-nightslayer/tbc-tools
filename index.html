@@ -874,6 +874,13 @@ function openLoginPanel() {
     h += '<label style="font-size:9px;color:#666;letter-spacing:1px">PASSWORD</label>';
     h += '<input id="authPass" type="password" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:8px 10px;outline:none;box-sizing:border-box" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" onkeydown="if(event.key===\'Enter\')authDoLogin()">';
     h += '<button class="btn primary" style="font-size:13px;padding:8px 24px;width:100%" onclick="authDoLogin()" id="authSubmitBtn">LOGIN</button>';
+    h += '<div id="authForgotLink" style="text-align:center;margin-top:2px"><a href="#" onclick="authShowForgotPassword();return false" style="font-size:10px;color:var(--neon-cyan);text-decoration:none;font-family:Share Tech Mono,monospace">Forgot your password?</a></div>';
+    h += '<div id="authForgotPanel" style="display:none;background:#0a0a14;border:1px solid var(--neon-cyan);padding:12px;margin-top:6px">';
+    h += '<div style="font-size:11px;color:#aaa;margin-bottom:8px">Enter your email and we\'ll send a password reset link.</div>';
+    h += '<input id="authResetEmail" type="email" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:8px 10px;outline:none;box-sizing:border-box" placeholder="email@example.com">';
+    h += '<button class="btn" style="font-size:12px;padding:6px 16px;width:100%;margin-top:6px" onclick="authDoResetPassword()">SEND RESET LINK</button>';
+    h += '<div id="authResetStatus" style="font-size:11px;color:#555;min-height:16px;margin-top:4px"></div>';
+    h += '</div>';
     h += '<div id="authStatus" style="font-size:11px;color:#555;min-height:16px"></div>';
     // Invite code for registration
     h += '<div id="authInviteArea" style="display:none;background:#0a0a14;border:1px solid #2a2a44;padding:10px;margin-top:4px">';
@@ -954,6 +961,70 @@ async function authDoLogout() {
   document.getElementById('authPanel').remove();
   updateAuthUI();
   toast('Logged out');
+}
+
+function authShowForgotPassword() {
+  var panel = document.getElementById('authForgotPanel');
+  var link = document.getElementById('authForgotLink');
+  if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  // Pre-fill email from login field
+  var loginEmail = document.getElementById('authEmail');
+  var resetEmail = document.getElementById('authResetEmail');
+  if (loginEmail && resetEmail && loginEmail.value) resetEmail.value = loginEmail.value;
+}
+
+async function authDoResetPassword() {
+  if (!_sb && !initSupabase()) { toast('Database not configured'); return; }
+  var emailEl = document.getElementById('authResetEmail');
+  var status = document.getElementById('authResetStatus');
+  if (!emailEl || !emailEl.value.trim()) { if (status) status.innerHTML = '<span style="color:var(--neon-red)">Enter your email</span>'; return; }
+  try {
+    var siteUrl = window.location.origin + window.location.pathname;
+    var result = await _sb.auth.resetPasswordForEmail(emailEl.value.trim(), { redirectTo: siteUrl });
+    if (result.error) throw result.error;
+    if (status) status.innerHTML = '<span style="color:var(--neon-green)">\u2705 Reset link sent! Check your inbox.</span>';
+  } catch(e) {
+    if (status) status.innerHTML = '<span style="color:var(--neon-red)">' + (e.message||'Failed') + '</span>';
+  }
+}
+
+function openNewPasswordPanel() {
+  // Show a panel for setting a new password after recovery
+  var existing = document.getElementById('newPassPanel');
+  if (existing) existing.remove();
+  var d = document.createElement('div');
+  d.id = 'newPassPanel';
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:10000;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center';
+  d.innerHTML = '<div style="background:var(--card-bg);border:2px solid var(--neon-cyan);max-width:380px;width:90%;padding:0;box-shadow:0 0 30px rgba(0,240,255,0.2)">' +
+    '<div style="padding:14px 20px;border-bottom:2px solid #2a2a44"><span style="font-family:Orbitron,sans-serif;font-size:14px;color:var(--neon-cyan);letter-spacing:2px">\ud83d\udd11 SET NEW PASSWORD</span></div>' +
+    '<div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">' +
+    '<label style="font-size:9px;color:#666;letter-spacing:1px">NEW PASSWORD</label>' +
+    '<input id="newPassInput" type="password" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:8px 10px;outline:none;box-sizing:border-box" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022">' +
+    '<label style="font-size:9px;color:#666;letter-spacing:1px">CONFIRM PASSWORD</label>' +
+    '<input id="newPassConfirm" type="password" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:8px 10px;outline:none;box-sizing:border-box" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022">' +
+    '<button class="btn primary" style="font-size:13px;padding:8px 24px;width:100%" onclick="authSetNewPassword()">UPDATE PASSWORD</button>' +
+    '<div id="newPassStatus" style="font-size:11px;color:#555;min-height:16px"></div>' +
+    '</div></div>';
+  document.body.appendChild(d);
+  d.addEventListener('click', function(e) { if (e.target === d) d.remove(); });
+}
+
+async function authSetNewPassword() {
+  if (!_sb) { toast('Database not configured'); return; }
+  var pass = document.getElementById('newPassInput').value;
+  var confirm = document.getElementById('newPassConfirm').value;
+  var status = document.getElementById('newPassStatus');
+  if (!pass || pass.length < 6) { if (status) status.innerHTML = '<span style="color:var(--neon-red)">Password must be at least 6 characters</span>'; return; }
+  if (pass !== confirm) { if (status) status.innerHTML = '<span style="color:var(--neon-red)">Passwords do not match</span>'; return; }
+  try {
+    var result = await _sb.auth.updateUser({ password: pass });
+    if (result.error) throw result.error;
+    toast('\u2705 Password updated! You can now log in.');
+    document.getElementById('newPassPanel').remove();
+    updateAuthUI();
+  } catch(e) {
+    if (status) status.innerHTML = '<span style="color:var(--neon-red)">' + (e.message||'Failed') + '</span>';
+  }
 }
 
 async function authSocialLogin(provider) {
@@ -9127,8 +9198,16 @@ function init() {
     var authType = urlParams.get('type');
     if (tokenHash && authType) {
       _sb.auth.verifyOtp({ token_hash: tokenHash, type: authType }).then(function(result) {
-        if (result.error) { console.log('Email verify error:', result.error); toast('Email verification failed: ' + result.error.message); }
-        else { _user = result.data.user; toast('\u2705 Email confirmed! Welcome.'); }
+        if (result.error) { console.log('Auth verify error:', result.error); toast('Verification failed: ' + result.error.message); }
+        else {
+          _user = result.data.user;
+          if (authType === 'recovery') {
+            toast('\ud83d\udd11 Set your new password');
+            openNewPasswordPanel();
+          } else {
+            toast('\u2705 Email confirmed! Welcome.');
+          }
+        }
         // Clean URL
         window.history.replaceState({}, '', window.location.pathname + window.location.hash);
         updateAuthUI();
