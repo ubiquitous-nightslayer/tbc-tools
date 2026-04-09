@@ -6457,7 +6457,7 @@ function renderPlayerProfile(container, playerName) {
   
   // Back navigation
   var h='<div style="display:flex;gap:6px;margin-bottom:8px">';
-  h+='<button class="back-btn" onclick="window._perfPlayer=null;window._perfBoss=null;window._perfFight=null;switchView(\'performance\')">\u25c0 LEADERBOARD</button>';
+  h+='<button class="back-btn" onclick="window._perfPlayer=null;window._perfBoss=null;window._perfFight=null;window._profileTab=null;switchView(\'performance\')">\u25c0 LEADERBOARD</button>';
   if (activeBoss) h+='<button class="back-btn" onclick="window._perfBoss=null;window._perfFight=null;switchView(\'performance\')">\u25c0 ALL BOSSES</button>';
   h+='</div>';
   h+=renderRaidFilter(filterRaid);
@@ -6493,12 +6493,28 @@ function renderPlayerProfile(container, playerName) {
   statArr.forEach(function(s){h+='<div style="text-align:center;min-width:70px"><div style="font-size:24px;font-weight:900;color:'+s.c+';font-family:Orbitron,sans-serif">'+s.v+'</div><div style="font-size:10px;color:var(--text-sub);font-family:Share Tech Mono,monospace;letter-spacing:1px">'+s.l+'</div></div>';});
   h+='</div></div>';
   
-  // Boss filter tabs (always show)
+  // ─── PROFILE TOOLBAR ───
+  if (!window._profileTab) window._profileTab = 'overview';
+  var profileTabs = [
+    {id:'overview', icon:'\ud83d\udcca', label:'Overview'},
+    {id:'trends', icon:'\ud83d\udcc8', label:'Trends'},
+    {id:'fightlog', icon:'\ud83d\udccb', label:'Fight Log'},
+    {id:'deepscan', icon:'\ud83d\udd0d', label:'Deep Scan'},
+    {id:'survivability', icon:'\ud83d\udee1', label:'Survivability'}
+  ];
+  h += '<div style="display:flex;gap:0;margin:8px 0 12px;border-bottom:2px solid #2a2a44">';
+  profileTabs.forEach(function(t) {
+    var active = window._profileTab === t.id;
+    h += '<button style="font-family:Share Tech Mono,monospace;font-size:12px;padding:8px 16px;border:none;cursor:pointer;letter-spacing:1px;border-bottom:2px solid ' + (active ? 'var(--neon-cyan)' : 'transparent') + ';color:' + (active ? 'var(--neon-cyan)' : 'var(--text-sub)') + ';background:' + (active ? 'rgba(0,240,255,0.05)' : 'transparent') + ';font-weight:' + (active ? '900' : '400') + '" onclick="window._profileTab=\'' + t.id + '\';switchView(\'performance\')">' + t.icon + ' ' + t.label + '</button>';
+  });
+  h += '</div>';
+  
+  // Boss filter tabs (always show on overview)
   var bossDPS={};
   entries.forEach(function(e){if(!bossDPS[e.boss])bossDPS[e.boss]={total:0,count:0,best:0,worst:Infinity,deaths:0,parseSum:0,parseN:0,entries:[]};var b=bossDPS[e.boss];b.total+=e.dps;b.count++;if(e.dps>b.best)b.best=e.dps;if(e.dps<b.worst)b.worst=e.dps;b.deaths+=e.deaths;if(e.parse>0){b.parseSum+=e.parse;b.parseN++;}b.entries.push(e);});
   var bossNames=Object.keys(bossDPS).sort(function(a,b){return Math.round(bossDPS[b].total/bossDPS[b].count)-Math.round(bossDPS[a].total/bossDPS[a].count);});
   
-  if (bossNames.length > 1) {
+  if (bossNames.length > 1 && (window._profileTab === 'overview' || window._profileTab === 'trends' || window._profileTab === 'fightlog')) {
     h+='<div class="date-tabs" style="margin-bottom:10px">';
     h+='<button class="date-tab'+(!activeBoss?' active':'')+'" onclick="window._perfBoss=null;window._perfFight=null;switchView(\'performance\')">ALL BOSSES</button>';
     bossNames.forEach(function(bn){
@@ -6514,15 +6530,15 @@ function renderPlayerProfile(container, playerName) {
   
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
   
-  // DPS BY BOSS (only when viewing all bosses)
-  if (!activeBoss) {
+  // DPS BY BOSS (only when viewing all bosses, overview tab)
+  if (!activeBoss && window._profileTab === 'overview') {
     var barItems=bossNames.map(function(bn){var b=bossDPS[bn];var avg=Math.round(b.total/b.count);return{label:bn+' ('+b.count+')',value:avg,bgValue:b.best,color:cc,labelColor:'var(--text)'};});
     h+='<div class="data-card player-profile"><div class="data-card-header">DPS BY BOSS \u2014 click tabs above to drill down</div>'+svgBarH(barItems,{w:680,padL:150,padR:60})+'</div>';
   }
   
   // DPS OVER TIME with reference lines
   var dated=viewEntries.filter(function(e){return e.date;}).sort(function(a,b){return(a.date+a.boss).localeCompare(b.date+b.boss);});
-  if (dated.length>=2) {
+  if (dated.length>=2 && (window._profileTab === 'trends' || window._profileTab === 'overview')) {
     // Calculate percentile reference lines from player data
     var sortedDPS=dated.map(function(e){return e.dps;}).sort(function(a,b){return a-b;});
     var p25=sortedDPS[Math.floor(sortedDPS.length*0.25)];
@@ -6594,14 +6610,14 @@ function renderPlayerProfile(container, playerName) {
   }
   
   // PARSE BY BOSS
-  if (parseEntries && !activeBoss) {
+  if (parseEntries && !activeBoss && (window._profileTab === 'overview' || window._profileTab === 'trends')) {
     var parseItems=bossNames.filter(function(bn){return bossDPS[bn].parseN>0;}).map(function(bn){var b=bossDPS[bn];var avg=Math.round(b.parseSum/b.parseN);return{label:bn,value:avg,color:parseColorForVal(avg),suffix:'%'};});
     if(parseItems.length) h+='<div class="data-card player-profile"><div class="data-card-header">PARSE BY BOSS</div>'+svgBarH(parseItems,{w:680,padL:150,padR:55,maxVal:100,barH:26})+'</div>';
   }
   
   // PARSE OVER TIME
   var parseDated=viewEntries.filter(function(e){return e.date&&e.parse>0;}).sort(function(a,b){return(a.date+a.boss).localeCompare(b.date+b.boss);});
-  if (parseDated.length>=2) {
+  if (parseDated.length>=2 && window._profileTab === 'trends') {
     var parseLineData=parseDated.map(function(e){return{x:e.date.substring(5),y:e.parse,label:e.date+' '+e.boss};});
     var parseRefs=[{y:95,label:'95',color:'#e268a8',dash:'2,3'},{y:75,label:'75',color:'#a855f7',dash:'2,3'},{y:50,label:'50',color:'#00ccff',dash:'3,3'},{y:25,label:'25',color:'#22cc66',dash:'3,3'}];
     h+='<div class="data-card player-profile" style="grid-column:span 2"><div class="data-card-header">PARSE % OVER TIME</div>'+svgLine(parseLineData,{w:1100,h:350,color:'#a855f7',refLines:parseRefs,padR:100})+'</div>';
@@ -6609,13 +6625,13 @@ function renderPlayerProfile(container, playerName) {
   
   // DEATHS BY BOSS
   var deathBossesArr=viewBosses.filter(function(bn){return bossDPS[bn]&&bossDPS[bn].deaths>0;});
-  if (deathBossesArr.length) {
+  if (deathBossesArr.length && window._profileTab === 'survivability') {
     var deathItems=deathBossesArr.sort(function(a,b){return bossDPS[b].deaths-bossDPS[a].deaths;}).map(function(bn){return{label:bn+' \u2620'+bossDPS[bn].deaths,value:bossDPS[bn].deaths,color:'#aa3344'};});
     h+='<div class="data-card player-profile"><div class="data-card-header">DEATHS BY BOSS</div>'+svgBarH(deathItems,{w:680,padL:160,padR:35,barH:24})+'</div>';
   }
   
   // BOSS BREAKDOWN TABLE (clickable rows)
-  if (!activeBoss) {
+  if (!activeBoss && window._profileTab === 'overview') {
     h+='<div class="data-card player-profile" style="grid-column:span 2"><div class="data-card-header">BOSS BREAKDOWN \u2014 click a boss to drill down</div>';
     h+='<table class="assign-table" style="font-size:12px"><thead><tr><th>Boss</th><th>Fights</th><th>Avg DPS</th><th>Best</th><th>Worst</th><th>Avg Parse</th><th>Deaths</th><th>DPS Range</th></tr></thead><tbody>';
     bossNames.forEach(function(bn){
@@ -6642,6 +6658,7 @@ function renderPlayerProfile(container, playerName) {
   h+='</div>'; // end grid
   
   // FIGHT LOG (expandable rows with raid context)
+  if (window._profileTab === 'fightlog') {
   h+='<div class="data-card player-profile"><div class="data-card-header">FIGHT LOG'+(activeBoss?' \u2014 '+activeBoss:'')+' \u2014 click a fight to see raid context</div>';
   h+='<table class="assign-table" style="font-size:11px"><thead><tr><th>Date</th><th>Boss</th><th>DPS</th><th>Total Dmg</th><th>Duration</th><th>vs Avg</th><th>Deaths</th><th>Killed By</th><th>Type</th><th>Size</th></tr></thead><tbody>';
   viewEntries.sort(function(a,b){return(b.date||'').localeCompare(a.date||'');}).forEach(function(e,idx){
@@ -6702,8 +6719,82 @@ function renderPlayerProfile(container, playerName) {
     }
   });
   h+='</tbody></table></div>';
+  } // end fightlog tab
+  
+  // DEEP SCAN TAB — auto-trigger deep scan and show inline
+  if (window._profileTab === 'deepscan') {
+    h += '<div class="data-card player-profile" style="grid-column:span 2">';
+    h += '<div class="data-card-header">\ud83d\udd0d DEEP SCAN \u2014 ' + playerName + '</div>';
+    h += '<div style="padding:12px;font-family:Share Tech Mono,monospace;font-size:12px">';
+    if (window._deepScanCache && window._deepScanCache[playerName]) {
+      // Render cached results inline
+      h += renderDeepScanInline(window._deepScanCache[playerName]);
+    } else {
+      h += '<div id="profileDeepScan" style="text-align:center;padding:30px">';
+      h += '<button class="btn primary" style="font-size:14px;padding:10px 30px" onclick="profileRunDeepScan(\'' + playerName.replace(/'/g, "\\'") + '\')">\ud83d\udd0d RUN DEEP SCAN</button>';
+      h += '<div style="font-size:11px;color:#666;margin-top:8px">Queries WCL for ability usage, cooldowns, consumables, avoidable damage, and boss focus across last 10 fights</div>';
+      h += '</div>';
+    }
+    h += '</div></div>';
+  }
+  
+  // SURVIVABILITY TAB — deaths, damage taken, DTPS analysis
+  if (window._profileTab === 'survivability') {
+    // Deaths summary
+    var deathRate = entries.length > 0 ? (totalDeaths / entries.length).toFixed(2) : 0;
+    var survScore = Math.max(0, Math.round(100 - (deathRate * 30)));
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">';
+    h += '<div class="stat-box"><div class="stat-value" style="color:' + (totalDeaths > 0 ? '#aa3344' : 'var(--neon-green)') + '">' + totalDeaths + '</div><div class="stat-label">TOTAL DEATHS</div></div>';
+    h += '<div class="stat-box"><div class="stat-value" style="color:' + (deathRate > 0.5 ? '#aa3344' : deathRate > 0.2 ? 'var(--neon-orange)' : 'var(--neon-green)') + '">' + deathRate + '</div><div class="stat-label">DEATHS / FIGHT</div></div>';
+    h += '<div class="stat-box"><div class="stat-value" style="color:' + (survScore >= 80 ? 'var(--neon-green)' : survScore >= 50 ? 'var(--neon-orange)' : '#aa3344') + '">' + survScore + '</div><div class="stat-label">SURVIVAL SCORE</div></div>';
+    h += '</div>';
+    
+    // DTPS over time
+    var dtpsDated = viewEntries.filter(function(e) { return e.date; }).sort(function(a,b) { return (a.date+a.boss).localeCompare(b.date+b.boss); });
+    var dtpsEntries = dtpsDated.filter(function(e) {
+      // Look up DTPS from growth data
+      var found = false;
+      RAIDS.forEach(function(r) { r.bosses.forEach(function(b) {
+        var k = r.id + '_' + b.id;
+        if (assignments[k] && assignments[k].growth) assignments[k].growth.forEach(function(g) {
+          if (g.player === playerName && g.date === e.date && g.boss === e.boss && g.dtps > 0) { e.dtps = g.dtps; found = true; }
+        });
+      }); });
+      return found;
+    });
+    if (dtpsEntries.length >= 2) {
+      var dtpsLine = dtpsEntries.map(function(e) { return {x: e.date.substring(5), y: e.dtps || 0, label: e.date + ' ' + e.boss}; });
+      h += '<div class="data-card player-profile"><div class="data-card-header">\ud83d\udee1 DAMAGE TAKEN PER SECOND (DTPS) OVER TIME</div>';
+      h += svgLine(dtpsLine, {w: 1100, h: 300, color: '#aa3344', padR: 80});
+      h += '</div>';
+    }
+    
+    // Death log — fights where player died
+    var deathFights = viewEntries.filter(function(e) { return e.deaths > 0; });
+    if (deathFights.length) {
+      h += '<div class="data-card player-profile"><div class="data-card-header">\u2620 DEATH LOG</div>';
+      h += '<table class="assign-table" style="font-size:11px"><thead><tr><th>Date</th><th>Boss</th><th>Deaths</th><th>Killed By</th><th>Death Time</th><th>DPS That Fight</th></tr></thead><tbody>';
+      deathFights.sort(function(a,b) { return (b.date||'').localeCompare(a.date||''); }).forEach(function(e) {
+        var dt = e.deathTime ? Math.floor(e.deathTime/60) + ':' + (e.deathTime%60<10?'0':'') + e.deathTime%60 : '\u2014';
+        h += '<tr><td style="color:var(--text-sub)">' + (e.date||'\u2014') + '</td>';
+        h += '<td style="font-weight:700">' + e.boss + '</td>';
+        h += '<td style="color:#aa3344;font-weight:900">\u2620 ' + e.deaths + '</td>';
+        h += '<td style="color:#aa3344">' + (e.killedBy || 'Unknown') + '</td>';
+        h += '<td style="color:var(--text-sub)">' + dt + '</td>';
+        h += '<td>' + e.dps.toLocaleString() + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    } else {
+      h += '<div class="data-card player-profile"><div class="data-card-header" style="color:var(--neon-green)">\u2705 ZERO DEATHS \u2014 Perfect Survival Record</div></div>';
+    }
+  }
   
   container.innerHTML=h;
+  
+  // Auto-trigger deep scan if tab is deepscan and no cache
+  if (window._profileTab === 'deepscan' && (!window._deepScanCache || !window._deepScanCache[playerName])) {
+    // Show the button, user clicks to trigger
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -9215,6 +9306,150 @@ function renderH2H(pd) {
   
   h += '</div>';
   return h;
+}
+
+// ─── DEEP SCAN: Profile-integrated helpers ───
+if (!window._deepScanCache) window._deepScanCache = {};
+
+function profileRunDeepScan(playerName) {
+  var el = document.getElementById('profileDeepScan');
+  if (el) el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--neon-cyan)">\ud83d\udd0d Scanning ' + playerName + '... querying WCL for abilities, cooldowns, consumables...</div>';
+  toast('\ud83d\udd0d Deep scanning ' + playerName + '...');
+  deepScanPlayer(playerName, function(results) {
+    if (!results) { toast('\u274c No data'); return; }
+    window._deepScanCache[playerName] = results;
+    // Re-render profile to show cached results
+    switchView('performance');
+    toast('\u2705 Deep scan complete for ' + playerName);
+  });
+}
+
+function renderDeepScanInline(results) {
+  var rh = '<div style="color:var(--text-sub);margin-bottom:10px">Analyzed ' + results.totalFights + ' recent fights</div>';
+  
+  // CPM
+  if (results.cpm.length) {
+    var avgCPM = 0;
+    results.cpm.forEach(function(c) { avgCPM += c.totalCasts; });
+    avgCPM = Math.round(avgCPM / results.cpm.length);
+    rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+    rh += '<div style="font-weight:900;color:var(--neon-cyan);margin-bottom:4px">\u23f1 CASTS PER FIGHT: ' + avgCPM + '</div>';
+    rh += '<div style="color:var(--text-sub);font-size:11px">Higher = more active. Compare within same class.</div>';
+    rh += '</div>';
+  }
+  
+  // Ability Breakdown
+  if (results.abilities && results.abilities.length) {
+    var abTotals = {};
+    results.abilities.forEach(function(a) {
+      if (!abTotals[a.ability]) abTotals[a.ability] = 0;
+      abTotals[a.ability] += a.casts;
+    });
+    var abSorted = Object.keys(abTotals).map(function(k) { return {name: k, total: abTotals[k]}; })
+      .sort(function(a, b) { return b.total - a.total; }).slice(0, 15);
+    var maxAb = abSorted.length ? abSorted[0].total : 1;
+    rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+    rh += '<div style="font-weight:900;color:var(--neon-cyan);margin-bottom:8px">\u2694 TOP ABILITIES (across ' + results.totalFights + ' fights)</div>';
+    abSorted.forEach(function(ab) {
+      var pct = Math.round(ab.total / maxAb * 100);
+      var avgPerFight = (ab.total / results.totalFights).toFixed(1);
+      rh += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">';
+      rh += '<div style="width:140px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;color:var(--text-bright);font-size:11px" title="' + ab.name + '">' + ab.name + '</div>';
+      rh += '<div style="flex:1;height:12px;background:#1a1a2e;border-radius:2px;overflow:hidden"><div style="width:' + pct + '%;height:100%;background:var(--neon-cyan);opacity:0.7"></div></div>';
+      rh += '<div style="width:70px;text-align:right;font-size:10px;color:var(--text-sub)">' + ab.total + ' <span style="color:#555">(' + avgPerFight + '/f)</span></div>';
+      rh += '</div>';
+    });
+    rh += '</div>';
+  }
+  
+  // Cooldown Efficiency
+  if (results.cooldowns && results.cooldowns.length) {
+    var cdTotals = {};
+    results.cooldowns.forEach(function(c) {
+      if (!cdTotals[c.cooldown]) cdTotals[c.cooldown] = {total: 0, fights: 0};
+      cdTotals[c.cooldown].total += c.uses;
+      cdTotals[c.cooldown].fights++;
+    });
+    rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+    rh += '<div style="font-weight:900;color:var(--neon-orange);margin-bottom:8px">\u23f0 COOLDOWN USAGE</div>';
+    Object.keys(cdTotals).forEach(function(cd) {
+      var avg = (cdTotals[cd].total / results.totalFights).toFixed(1);
+      var usedIn = Math.round(cdTotals[cd].fights / results.totalFights * 100);
+      var cdColor = usedIn >= 80 ? 'var(--neon-green)' : (usedIn >= 50 ? 'var(--neon-orange)' : '#aa3344');
+      rh += '<div style="display:flex;justify-content:space-between;margin-bottom:2px">';
+      rh += '<span style="color:var(--text-bright)">' + cd + '</span>';
+      rh += '<span style="color:' + cdColor + ';font-weight:900">' + avg + '/fight \u2022 used in ' + usedIn + '% of fights</span>';
+      rh += '</div>';
+    });
+    rh += '</div>';
+  }
+  
+  // Consumables
+  if (results.consumables && results.consumables.length) {
+    var flaskRate = Math.round(results.consumables.filter(function(c) { return c.hasFlask; }).length / results.consumables.length * 100);
+    var foodRate = Math.round(results.consumables.filter(function(c) { return c.hasFood; }).length / results.consumables.length * 100);
+    var potRate = Math.round(results.consumables.filter(function(c) { return c.hasPot; }).length / results.consumables.length * 100);
+    var consColor = flaskRate >= 80 ? 'var(--neon-green)' : (flaskRate >= 50 ? 'var(--neon-orange)' : '#aa3344');
+    rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+    rh += '<div style="font-weight:900;color:' + consColor + ';margin-bottom:4px">\ud83e\uddea CONSUMABLE COMPLIANCE</div>';
+    rh += '<div>Flask/Elixir: <span style="color:' + consColor + ';font-weight:900">' + flaskRate + '%</span> of fights</div>';
+    rh += '<div>Food Buff: <span style="font-weight:900">' + foodRate + '%</span> of fights</div>';
+    rh += '<div>Combat Pot: <span style="font-weight:900">' + potRate + '%</span> of fights</div>';
+    rh += '</div>';
+  }
+  
+  // Avoidable Damage
+  if (results.avoidable && results.avoidable.length) {
+    rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #aa3344">';
+    rh += '<div style="font-weight:900;color:#aa3344;margin-bottom:4px">\u26a0 AVOIDABLE DAMAGE (' + results.avoidable.length + ' incidents)</div>';
+    var abCounts = {};
+    results.avoidable.forEach(function(a) {
+      if (!abCounts[a.ability]) abCounts[a.ability] = {count: 0, total: 0};
+      abCounts[a.ability].count += a.hits;
+      abCounts[a.ability].total += a.total;
+    });
+    Object.keys(abCounts).forEach(function(ab) {
+      rh += '<div style="color:var(--neon-orange)">' + ab + ': <span style="color:#aa3344;font-weight:900">' + abCounts[ab].count + ' hits</span> (' + Math.round(abCounts[ab].total / 1000) + 'k dmg)</div>';
+    });
+    rh += '</div>';
+  } else {
+    rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid var(--neon-green)">';
+    rh += '<div style="font-weight:900;color:var(--neon-green)">\u2705 ZERO avoidable damage taken</div>';
+    rh += '</div>';
+  }
+  
+  // Boss Focus / Padding
+  if (results.bossDmg && results.bossDmg.length) {
+    var avgPad = 0;
+    results.bossDmg.forEach(function(d) { avgPad += d.paddingPct; });
+    avgPad = Math.round(avgPad / results.bossDmg.length);
+    var padCol = avgPad <= 5 ? 'var(--neon-green)' : (avgPad <= 15 ? 'var(--neon-cyan)' : (avgPad <= 25 ? 'var(--neon-orange)' : '#aa3344'));
+    rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+    rh += '<div style="font-weight:900;color:' + padCol + ';margin-bottom:4px">\ud83c\udfaf BOSS FOCUS: ' + (100 - avgPad) + '% on boss</div>';
+    rh += '<div style="color:var(--text-sub);font-size:11px">' + avgPad + '% on non-boss targets (padding). Lower is better.</div>';
+    rh += '</div>';
+  }
+  
+  // Activity Trend
+  if (results.cpm.length > 1) {
+    rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+    rh += '<div style="font-weight:900;color:var(--neon-green);margin-bottom:8px">\ud83d\udcc8 ACTIVITY TREND (casts per fight)</div>';
+    var maxC = 0;
+    results.cpm.forEach(function(c) { if (c.totalCasts > maxC) maxC = c.totalCasts; });
+    rh += '<div style="display:flex;align-items:flex-end;gap:2px;height:60px">';
+    results.cpm.slice().reverse().forEach(function(c) {
+      var barH = maxC > 0 ? Math.round(c.totalCasts / maxC * 55) : 5;
+      rh += '<div title="' + c.boss + ' (' + c.date + '): ' + c.totalCasts + ' casts" style="flex:1;min-width:8px;height:' + barH + 'px;background:var(--neon-cyan);opacity:0.7;border-radius:2px 2px 0 0"></div>';
+    });
+    rh += '</div>';
+    rh += '<div style="display:flex;justify-content:space-between;font-size:9px;color:#555;margin-top:2px"><span>Oldest</span><span>Recent</span></div>';
+    rh += '</div>';
+  }
+  
+  // Re-scan button
+  rh += '<div style="text-align:center;margin-top:8px"><button class="btn" style="font-size:11px;padding:5px 16px" onclick="delete window._deepScanCache[\'' + results.playerName.replace(/'/g, "\\'") + '\'];profileRunDeepScan(\'' + results.playerName.replace(/'/g, "\\'") + '\')">\ud83d\udd04 RE-SCAN</button></div>';
+  
+  return rh;
 }
 
 // ─── DEEP SCAN UI ───
