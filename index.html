@@ -4379,7 +4379,8 @@ function importWCLReportSilent(reportCode, callback) {
         var tableQueries = killFights.map(function(f) {
           return 'dmg' + f.id + ': table(dataType: DamageDone, fightIDs: [' + f.id + '])' +
                  ' heal' + f.id + ': table(dataType: Healing, fightIDs: [' + f.id + '])' +
-                 ' dtaken' + f.id + ': table(dataType: DamageTaken, fightIDs: [' + f.id + '])';
+                 ' dtaken' + f.id + ': table(dataType: DamageTaken, fightIDs: [' + f.id + '])' +
+                 ' deaths' + f.id + ': table(dataType: Deaths, fightIDs: [' + f.id + '])';
         }).join(' ');
         var dpsQuery = '{ reportData { report(code: "' + reportCode + '") { ' + tableQueries + ' } } }';
         
@@ -4392,6 +4393,7 @@ function importWCLReportSilent(reportCode, callback) {
               var tableData = dpsReport['dmg' + fight.id];
               var healData = dpsReport['heal' + fight.id];
               var dtakenData = dpsReport['dtaken' + fight.id];
+              var deathData = dpsReport['deaths' + fight.id];
               if (!tableData || !tableData.data || !tableData.data.entries) return;
               
               var mb = null, mr = null, bs2 = 0;
@@ -4413,25 +4415,30 @@ function importWCLReportSilent(reportCode, callback) {
               if (!assignments[gKey].growth) assignments[gKey].growth = [];
               
               var PET_TYPES2 = ['Pet','NPC','Boss','Unknown','Creature','pet'];
-              var healMap2 = {}, dtakenMap2 = {};
+              var healMap2 = {}, dtakenMap2 = {}, deathMap2 = {};
               if (healData && healData.data && healData.data.entries) {
                 healData.data.entries.forEach(function(e) { if (e.name) healMap2[e.name] = e.total || 0; });
               }
               if (dtakenData && dtakenData.data && dtakenData.data.entries) {
                 dtakenData.data.entries.forEach(function(e) { if (e.name) dtakenMap2[e.name] = e.total || 0; });
               }
+              if (deathData && deathData.data && deathData.data.entries) {
+                deathData.data.entries.forEach(function(e) { if (e.name) deathMap2[e.name] = (deathMap2[e.name] || 0) + 1; });
+              }
               tableData.data.entries.forEach(function(entry) {
                 if (!entry.name) return;
                 if (PET_TYPES2.indexOf(entry.type) !== -1) return;
                 var rMatch2 = GUILD_ROSTER.find(function(r){ return r.name === entry.name || r.name.toLowerCase() === entry.name.toLowerCase(); });
+                var pName = rMatch2 ? rMatch2.name : entry.name;
                 var dur2 = (fight.endTime - fight.startTime) / 1000;
                 if (dur2 < 1) return;
                 assignments[gKey].growth.push({
-                  player: rMatch2 ? rMatch2.name : entry.name,
+                  player: pName,
                   dps: Math.round(entry.total / dur2),
-                  hps: Math.round((healMap2[entry.name] || 0) / dur2),
-                  dtps: Math.round((dtakenMap2[entry.name] || 0) / dur2),
-                  parse: 0, deaths: 0,
+                  hps: Math.round((healMap2[entry.name] || healMap2[pName] || 0) / dur2),
+                  dtps: Math.round((dtakenMap2[entry.name] || dtakenMap2[pName] || 0) / dur2),
+                  parse: 0,
+                  deaths: deathMap2[entry.name] || deathMap2[pName] || 0,
                   notes: 'WCL ' + dateStr,
                   cls: rMatch2 ? rMatch2.cls : (entry.type || ''),
                   date: dateStr,
@@ -4439,8 +4446,8 @@ function importWCLReportSilent(reportCode, callback) {
                   reportCode: reportCode,
                   fightId: fight.id,
                   totalDamage: entry.total || 0,
-                  totalHealing: healMap2[entry.name] || 0,
-                  totalDamageTaken: dtakenMap2[entry.name] || 0,
+                  totalHealing: healMap2[entry.name] || healMap2[pName] || 0,
+                  totalDamageTaken: dtakenMap2[entry.name] || dtakenMap2[pName] || 0,
                   fightDuration: Math.round(dur2)
                 });
               });
@@ -4625,7 +4632,8 @@ function importWCLReport(reportCode) {
         var tableQueries = killFights.map(function(f) {
           return 'dmg' + f.id + ': table(dataType: DamageDone, fightIDs: [' + f.id + '])' +
                  ' heal' + f.id + ': table(dataType: Healing, fightIDs: [' + f.id + '])' +
-                 ' dtaken' + f.id + ': table(dataType: DamageTaken, fightIDs: [' + f.id + '])';
+                 ' dtaken' + f.id + ': table(dataType: DamageTaken, fightIDs: [' + f.id + '])' +
+                 ' deaths' + f.id + ': table(dataType: Deaths, fightIDs: [' + f.id + '])';
         }).join(' ');
         var dpsQuery = '{ reportData { report(code: "' + reportCode + '") { ' + tableQueries + ' } } }';
         
@@ -4638,6 +4646,7 @@ function importWCLReport(reportCode) {
               var tableData = dpsReport['dmg' + fight.id];
               var healData = dpsReport['heal' + fight.id];
               var dtakenData = dpsReport['dtaken' + fight.id];
+              var deathData3 = dpsReport['deaths' + fight.id];
               if (!tableData || !tableData.data || !tableData.data.entries) return;
               
               // Find matching boss
@@ -4664,28 +4673,30 @@ function importWCLReport(reportCode) {
               if (!assignments[gKey].growth) assignments[gKey].growth = [];
               
               var PET_TYPES = ['Pet','NPC','Boss','Unknown','Creature','pet'];
-              // Build healing + dtaken lookup maps
-              var healMap = {}, dtakenMap = {};
+              var healMap = {}, dtakenMap = {}, deathMap3 = {};
               if (healData && healData.data && healData.data.entries) {
                 healData.data.entries.forEach(function(e) { if (e.name) healMap[e.name] = e.total || 0; });
               }
               if (dtakenData && dtakenData.data && dtakenData.data.entries) {
                 dtakenData.data.entries.forEach(function(e) { if (e.name) dtakenMap[e.name] = e.total || 0; });
               }
+              if (deathData3 && deathData3.data && deathData3.data.entries) {
+                deathData3.data.entries.forEach(function(e) { if (e.name) deathMap3[e.name] = (deathMap3[e.name] || 0) + 1; });
+              }
               tableData.data.entries.forEach(function(entry) {
                 if (!entry.name) return;
                 if (PET_TYPES.indexOf(entry.type) !== -1) return;
-                // Match against roster to confirm it's a guild player
                 var rMatch = GUILD_ROSTER.find(function(r){ return r.name === entry.name || r.name.toLowerCase() === entry.name.toLowerCase(); });
+                var pName3 = rMatch ? rMatch.name : entry.name;
                 var durationSec = (fight.endTime - fight.startTime) / 1000;
                 if (durationSec < 1) return;
                 assignments[gKey].growth.push({
-                  player: rMatch ? rMatch.name : entry.name,
+                  player: pName3,
                   dps: Math.round(entry.total / durationSec),
-                  hps: Math.round((healMap[entry.name] || 0) / durationSec),
-                  dtps: Math.round((dtakenMap[entry.name] || 0) / durationSec),
+                  hps: Math.round((healMap[entry.name] || healMap[pName3] || 0) / durationSec),
+                  dtps: Math.round((dtakenMap[entry.name] || dtakenMap[pName3] || 0) / durationSec),
                   parse: 0,
-                  deaths: 0,
+                  deaths: deathMap3[entry.name] || deathMap3[pName3] || 0,
                   notes: 'WCL ' + dateStr,
                   cls: rMatch ? rMatch.cls : (entry.type || ''),
                   date: dateStr,
@@ -5425,7 +5436,7 @@ function renderPerformanceView(container) {
   // Sub-tabs
   h += '<div style="display:flex;gap:2px;margin-bottom:14px;flex-wrap:wrap">';
   ['overview','rankings','healing','survivability','tanks','reportcard','rosteraudit','h2h'].forEach(function(t) {
-    var labels = {overview:'📊 Overview', rankings:'🏆 Rankings', healing:'💚 Healing', survivability:'🛡 Survivability', tanks:'🛡 Tank Metrics', reportcard:'📝 Report Card'};
+    var labels = {overview:'📊 Overview', rankings:'🏆 Rankings', healing:'💚 Healing', survivability:'🛡 Survivability', tanks:'🛡 Tank Metrics', reportcard:'📝 Report Card', rosteraudit:'🏆 Roster Audit', h2h:'⚔ Head-to-Head'};
     var active = sub === t;
     h += '<button class="nav-tab' + (active?' active':'') + '" style="font-size:11px;padding:5px 14px" onclick="window._perfSub=\'' + t + '\';switchView(\'performance\')">' + labels[t] + '</button>';
   });
@@ -8539,7 +8550,7 @@ function formatMs(ms){var s=Math.round(ms/1000);var m=Math.floor(s/60);s=s%60;re
 
 
 // ═══════════════════════════════════════════
-// ELITE ANALYTICS — Method/Liquid-tier metrics
+// ELITE ANALYTICS — weighted roster analysis
 // ═══════════════════════════════════════════
 
 // ─── KNOWN AVOIDABLE ABILITIES (TBC) ───
@@ -8728,16 +8739,21 @@ function deepScanPlayer(playerName, callback) {
         if (buffsData && buffsData.data && buffsData.data.entries) {
           var playerBuffs = [];
           buffsData.data.entries.forEach(function(e) {
+            // WCL Buffs table: top-level entries are abilities, sub-entries are players who had them
+            var playerHadBuff = false;
             if (e.entries) e.entries.forEach(function(sub) {
-              if (sub.name && sub.name.toLowerCase() === playerName.toLowerCase()) playerBuffs.push(e.name);
+              if (sub.name && sub.name.toLowerCase() === playerName.toLowerCase()) playerHadBuff = true;
             });
-            // Direct check
-            if (e.name) playerBuffs.push(e.name);
+            // Also check if this is a per-player view (sourceID filtered)
+            if (!e.entries && e.name) playerHadBuff = true;
+            if (playerHadBuff && e.name) playerBuffs.push(e.name);
           });
-          var hasFlask = REQUIRED_CONSUMABLES.flasks.some(function(f) { return playerBuffs.some(function(b) { return b && b.indexOf(f) !== -1; }); });
-          var hasFood = REQUIRED_CONSUMABLES.food.some(function(f) { return playerBuffs.some(function(b) { return b && b.indexOf(f) !== -1; }); });
-          var hasPot = REQUIRED_CONSUMABLES.potions.some(function(f) { return playerBuffs.some(function(b) { return b && b.indexOf(f) !== -1; }); });
-          allResults.consumables.push({boss: fight.boss, date: fight.date, hasFlask: hasFlask, hasFood: hasFood, hasPot: hasPot, buffs: playerBuffs.slice(0, 30)});
+          if (playerBuffs.length) {
+            var hasFlask = REQUIRED_CONSUMABLES.flasks.some(function(f) { return playerBuffs.some(function(b) { return b && b.indexOf(f) !== -1; }); });
+            var hasFood = REQUIRED_CONSUMABLES.food.some(function(f) { return playerBuffs.some(function(b) { return b && b.indexOf(f) !== -1; }); });
+            var hasPot = REQUIRED_CONSUMABLES.potions.some(function(f) { return playerBuffs.some(function(b) { return b && b.indexOf(f) !== -1; }); });
+            allResults.consumables.push({boss: fight.boss, date: fight.date, hasFlask: hasFlask, hasFood: hasFood, hasPot: hasPot, buffs: playerBuffs});
+          }
         }
         
         // Avoidable Damage — check DamageTaken abilities
@@ -8866,7 +8882,7 @@ function renderRosterAudit(pd) {
   if (!cards.length) return '<div class="data-card" style="text-align:center;padding:40px;color:var(--text-sub)">Need at least 2 fights per player. Import more WCL reports.</div>';
   
   var h = '';
-  h += '<div class="data-card"><div class="data-card-header">\ud83c\udfc6 ROSTER SCORECARD \u2014 Method/Liquid-tier weighted analysis (click \ud83d\udd0d for deep scan)</div>';
+  h += '<div class="data-card"><div class="data-card-header">\ud83c\udfc6 ROSTER SCORECARD \u2014 weighted performance analysis (click \ud83d\udd0d for deep scan)</div>';
   h += '<div style="font-size:11px;color:var(--text-sub);margin-bottom:10px;font-family:Share Tech Mono,monospace">Weights: Consistency 20% \u2022 Survival 20% \u2022 Parse 15% \u2022 Attendance 15% \u2022 Class Rank 10% \u2022 Improvement 10% \u2022 Pressure 5% \u2022 Consumables 5%</div>';
   h += '<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#666;border-bottom:2px solid var(--border)">';
   h += '<th style="text-align:left;padding:5px">#</th>';
