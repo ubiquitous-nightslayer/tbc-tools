@@ -783,23 +783,26 @@ async function generateInviteCode(role) {
 
 async function useInviteCode(code) {
   if (!_sb || !_user) throw new Error('Not logged in');
-  var result = await _sb.from('invite_codes').select('*, guilds(*)').eq('code', code.toUpperCase()).single();
-  if (result.error) throw new Error('Invalid invite code');
+  // Step 1: Look up invite code (no join - avoids RLS issues)
+  var result = await _sb.from('invite_codes').select('*').eq('code', code.toUpperCase()).maybeSingle();
+  if (result.error || !result.data) throw new Error('Invalid invite code');
   var inv = result.data;
   if (inv.expires_at && new Date(inv.expires_at) < new Date()) throw new Error('Invite code expired');
   if (inv.max_uses > 0 && inv.use_count >= inv.max_uses) throw new Error('Invite code fully used');
-  // Join guild
+  // Step 2: Join guild
   var joinResult = await _sb.from('guild_members').insert({ guild_id: inv.guild_id, user_id: _user.id, role: inv.role });
   if (joinResult.error) {
     if (joinResult.error.code === '23505') throw new Error('Already a member of this guild');
     throw joinResult.error;
   }
-  // Increment use count
+  // Step 3: Increment use count
   await _sb.from('invite_codes').update({ use_count: (inv.use_count || 0) + 1 }).eq('code', code.toUpperCase());
-  _guild = inv.guilds;
+  // Step 4: Fetch guild data separately
+  var guildResult = await _sb.from('guilds').select('*').eq('id', inv.guild_id).maybeSingle();
+  _guild = guildResult.data || {id: inv.guild_id, name: 'Guild'};
   _guildRole = inv.role;
   applyGuildConfig(_guild);
-  return inv.guilds;
+  return _guild;
 }
 
 // ── LOGIN UI ──
@@ -970,21 +973,20 @@ async function authGenInvite(role) {
     var roleUpper = role.toUpperCase();
     
     // Build the copy-paste message
-    var msg = '═══ ' + guildName + ' \u2014 TBC Assignment Sheet ═══\n\n';
-    msg += 'You\u2019ve been invited as ' + roleUpper + '.\n\n';
-    msg += 'STEP 1: Go to the site:\n' + siteUrl + '\n\n';
-    msg += 'STEP 2: Click the \ud83d\udd10 LOGIN button (top right toolbar)\n\n';
-    msg += 'STEP 3: Click "LOGIN WITH DISCORD" (big purple button)\n\n';
-    msg += 'STEP 4: After logging in, enter this invite code:\n\n';
-    msg += '    \ud83c\udf9f  ' + code + '\n\n';
-    msg += 'STEP 5: Click JOIN. Done! Everything loads automatically.\n\n';
-    msg += 'Code expires in 7 days. \u2022 Role: ' + roleUpper;
+    var msg = '--- ' + guildName + ' - TBC Assignment Sheet ---\n\n';
+    msg += 'You have been invited as ' + roleUpper + '.\n\n';
+    msg += '1. Go to: ' + siteUrl + '\n';
+    msg += '2. Click LOGIN (top right)\n';
+    msg += '3. Click LOGIN WITH DISCORD\n';
+    msg += '4. Enter invite code:  ' + code + '\n';
+    msg += '5. Click JOIN\n\n';
+    msg += 'Code expires in 7 days. Role: ' + roleUpper;
     
     // Show modal with the message
     var h = '<div id="inviteModal" style="position:fixed;inset:0;background:rgba(5,5,20,0.95);z-index:400;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">';
     h += '<div style="background:#111118;border:2px solid var(--neon-green);width:550px;max-width:95vw;padding:24px">';
     h += '<div style="font-family:Orbitron,sans-serif;font-size:14px;color:var(--neon-green);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">';
-    h += '<span>\ud83c\udf9f ' + roleUpper + ' INVITE READY</span>';
+    h += '<span>' + roleUpper + ' INVITE READY</span>';
     h += '<button onclick="document.getElementById(\'inviteModal\').remove()" style="background:none;border:none;color:#ff2244;font-size:20px;cursor:pointer">\u00d7</button>';
     h += '</div>';
     h += '<div style="font-size:12px;color:var(--text-sub);margin-bottom:10px">Copy this entire message and DM it to the person on Discord:</div>';
