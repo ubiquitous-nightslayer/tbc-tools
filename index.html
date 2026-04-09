@@ -8813,7 +8813,7 @@ var REQUIRED_CONSUMABLES = {
   potions: ['Destruction Potion','Haste Potion','Super Mana Potion','Ironshield Potion','Flame Cap']
 };
 
-var CLASS_COOLDOWNS = {
+var CLASS_CD_TRACKING = {
   Mage: ['Combustion','Icy Veins','Arcane Power','Presence of Mind','Cold Snap','Evocation'],
   Rogue: ['Adrenaline Rush','Blade Flurry','Cold Blood','Evasion','Vanish'],
   Hunter: ['Bestial Wrath','Rapid Fire','Kill Command','Intimidation','Readiness'],
@@ -9007,7 +9007,7 @@ function deepScanPlayer(playerName, callback) {
               });
             }); });
           }
-          var classCDs = CLASS_COOLDOWNS[playerCls] || [];
+          var classCDs = CLASS_CD_TRACKING[playerCls] || [];
           classCDs.forEach(function(cd) {
             var used = abilityMap[cd] || 0;
             if (used > 0) allResults.cooldowns.push({boss: fight.boss, date: fight.date, cooldown: cd, uses: used, fightId: fid});
