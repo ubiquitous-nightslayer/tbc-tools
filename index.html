@@ -5424,7 +5424,7 @@ function renderPerformanceView(container) {
   var h = renderRaidFilter(filterRaid);
   // Sub-tabs
   h += '<div style="display:flex;gap:2px;margin-bottom:14px;flex-wrap:wrap">';
-  ['overview','rankings','healing','survivability','tanks','reportcard'].forEach(function(t) {
+  ['overview','rankings','healing','survivability','tanks','reportcard','rosteraudit','h2h'].forEach(function(t) {
     var labels = {overview:'📊 Overview', rankings:'🏆 Rankings', healing:'💚 Healing', survivability:'🛡 Survivability', tanks:'🛡 Tank Metrics', reportcard:'📝 Report Card'};
     var active = sub === t;
     h += '<button class="nav-tab' + (active?' active':'') + '" style="font-size:11px;padding:5px 14px" onclick="window._perfSub=\'' + t + '\';switchView(\'performance\')">' + labels[t] + '</button>';
@@ -5436,6 +5436,8 @@ function renderPerformanceView(container) {
   else if (sub === 'survivability') h += renderSurvivabilityTab(pd);
   else if (sub === 'tanks') h += renderTankTab(pd);
   else if (sub === 'reportcard') h += renderReportCard(pd);
+  else if (sub === 'rosteraudit') h += renderRosterAudit(pd);
+  else if (sub === 'h2h') h += renderH2H(pd);
   container.innerHTML = h;
 }
 
@@ -8532,6 +8534,561 @@ function openWipeAutopsy(reportCode, fightId, bossName) {
 }
 
 function formatMs(ms){var s=Math.round(ms/1000);var m=Math.floor(s/60);s=s%60;return m+':'+(s<10?'0':'')+s;}
+
+
+
+
+// ═══════════════════════════════════════════
+// ELITE ANALYTICS — Method/Liquid-tier metrics
+// ═══════════════════════════════════════════
+
+// ─── KNOWN AVOIDABLE ABILITIES (TBC) ───
+var AVOIDABLE_ABILITIES = {
+  // Karazhan
+  'Flame Wreath':1,'Blizzard':1,'Enfeeble':1,'Shadow Word: Pain':0,'Chained':0,
+  // Gruul/Mag
+  'Shatter':1,'Cave In':1,'Ground Slam':1,'Blast Wave':1,'Blast Nova':1,
+  // SSC
+  'Spout':1,'Whirl':1,'Lurker Below':0,'Static Charge':1,'Tidal Wave':1,
+  // TK
+  'Arcane Disruption':1,'Disorient':1,'Phoenix Fire':1,'Flame Strike':1,'Shock Barrier':0,
+  // Hyjal
+  'Rain of Fire':1,'Doomfire':1,'Carrion Swarm':1,
+  // BT
+  'Flame Crash':1,'Shear':1,'Bloodboil':0,'Spirit Shock':1,'Fatal Attraction':1,'Prismatic Aura':0,
+  // Sunwell
+  'Meteor Slash':0,'Shadow Image':0,'Dark Barrage':1,'Fire Bloom':1,'Flame Dart':1
+};
+
+// ─── TBC CONSUMABLES CHECK LIST ───
+var REQUIRED_CONSUMABLES = {
+  flasks: ['Flask of Pure Death','Flask of Supreme Power','Flask of Blinding Light','Flask of Relentless Assault','Flask of Mighty Versatility','Flask of Fortification','Flask of Chromatic Wonder','Shattrath Flask'],
+  elixirs_battle: ['Elixir of Major Agility','Elixir of Major Firepower','Elixir of Major Frost Power','Elixir of Major Shadow Power','Elixir of Healing Power','Elixir of Major Strength','Adept\'s Elixir','Onslaught Elixir'],
+  elixirs_guardian: ['Elixir of Major Mageblood','Elixir of Draenic Wisdom','Elixir of Major Defense','Elixir of Major Fortitude','Elixir of Ironskin'],
+  food: ['Well Fed','Increased Intellect','Increased Spirit','Attack Power','Spell Power','Agility','Strength'],
+  weapon: ['Brilliant Wizard Oil','Superior Wizard Oil','Adamantite Sharpening Stone','Adamantite Weightstone','Righteous Weapon Coating'],
+  potions: ['Destruction Potion','Haste Potion','Super Mana Potion','Ironshield Potion','Flame Cap']
+};
+
+// ─── LINEAR REGRESSION (trend slope) ───
+function linearRegression(points) {
+  var n = points.length;
+  if (n < 2) return {slope: 0, r2: 0, predicted: 0};
+  var sumX=0, sumY=0, sumXY=0, sumXX=0, sumYY=0;
+  points.forEach(function(p, i) {
+    sumX += i; sumY += p.y; sumXY += i * p.y; sumXX += i * i; sumYY += p.y * p.y;
+  });
+  var slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+  var intercept = (sumY - slope * sumX) / n;
+  // R-squared
+  var yMean = sumY / n;
+  var ssTot = 0, ssRes = 0;
+  points.forEach(function(p, i) {
+    ssTot += Math.pow(p.y - yMean, 2);
+    ssRes += Math.pow(p.y - (intercept + slope * i), 2);
+  });
+  var r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
+  var predicted = intercept + slope * n; // next value prediction
+  return {slope: Math.round(slope * 10) / 10, r2: Math.round(r2 * 100) / 100, predicted: Math.round(predicted), direction: slope > 5 ? 'improving' : (slope < -5 ? 'declining' : 'stable')};
+}
+
+// ─── FIRST DEATH RATE (from attempt data) ───
+function calcFirstDeathRate(playerName) {
+  var totalWipes = 0, firstDeaths = 0;
+  Object.keys(assignments).forEach(function(key) {
+    var a = assignments[key];
+    if (!a.attempts) return;
+    a.attempts.forEach(function(att) {
+      if (att.result === 'Kill') return;
+      totalWipes++;
+      // Check if this player was first death (stored from autopsy)
+      if (att.firstDeath === playerName) firstDeaths++;
+    });
+  });
+  return {totalWipes: totalWipes, firstDeaths: firstDeaths, rate: totalWipes > 0 ? Math.round(firstDeaths / totalWipes * 100) : 0};
+}
+
+// ─── PERFORMANCE UNDER PRESSURE ───
+function calcPressurePerformance(playerEntries) {
+  // Compare first-kill DPS vs farm (repeated) DPS for same boss
+  var bossCounts = {};
+  playerEntries.forEach(function(e) {
+    if (!bossCounts[e.boss]) bossCounts[e.boss] = [];
+    bossCounts[e.boss].push(e);
+  });
+  var firstKillDPS = 0, firstKillCount = 0, farmDPS = 0, farmCount = 0;
+  Object.keys(bossCounts).forEach(function(boss) {
+    var entries = bossCounts[boss].sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
+    if (entries.length >= 2) {
+      firstKillDPS += entries[0].dps; firstKillCount++;
+      for (var i = 1; i < entries.length; i++) { farmDPS += entries[i].dps; farmCount++; }
+    }
+  });
+  var avgFirst = firstKillCount ? Math.round(firstKillDPS / firstKillCount) : 0;
+  var avgFarm = farmCount ? Math.round(farmDPS / farmCount) : 0;
+  var delta = avgFarm > 0 ? Math.round((avgFirst - avgFarm) / avgFarm * 100) : 0;
+  return {firstKillAvg: avgFirst, farmAvg: avgFarm, deltaPercent: delta, choker: delta < -15};
+}
+
+// ─── DEEP SCAN: On-demand WCL query for advanced metrics ───
+function deepScanPlayer(playerName, callback) {
+  var token = getWclToken();
+  if (!token) { toast('Set up WCL first'); return; }
+  
+  // Find recent fights for this player
+  var recentFights = [];
+  RAIDS.forEach(function(raid) {
+    raid.bosses.forEach(function(boss) {
+      var key = raid.id + '_' + boss.id;
+      var a = assignments[key] || {};
+      if (!a.growth) return;
+      a.growth.forEach(function(g) {
+        if (g.player === playerName && g.reportCode && g.fightId) {
+          recentFights.push({reportCode: g.reportCode, fightId: g.fightId, boss: g.boss || boss.name, date: g.date || '', dps: g.dps || 0});
+        }
+      });
+    });
+  });
+  
+  // Deduplicate by reportCode+fightId, take last 10
+  var seen = {};
+  recentFights = recentFights.filter(function(f) {
+    var key = f.reportCode + '_' + f.fightId;
+    if (seen[key]) return false;
+    seen[key] = true;
+    return true;
+  }).sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); }).slice(0, 10);
+  
+  if (!recentFights.length) { toast('No WCL fight data for ' + playerName); if (callback) callback(null); return; }
+  
+  // Group by reportCode for efficient querying
+  var byReport = {};
+  recentFights.forEach(function(f) {
+    if (!byReport[f.reportCode]) byReport[f.reportCode] = [];
+    byReport[f.reportCode].push(f);
+  });
+  
+  var allResults = {cpm: [], consumables: [], avoidable: [], bossDmg: [], totalFights: recentFights.length, playerName: playerName};
+  var reportCodes = Object.keys(byReport);
+  var completed = 0;
+  
+  // Find player's sourceID first, then query detailed tables
+  reportCodes.forEach(function(code) {
+    var fights = byReport[code];
+    var fightIds = fights.map(function(f) { return f.fightId; });
+    
+    // Query: masterData for sourceID, then Casts + Buffs + DamageTaken + DamageDone by target
+    var q = '{ reportData { report(code: "' + code + '") {';
+    q += ' masterData { actors(type: "Player") { id name } }';
+    fightIds.forEach(function(fid) {
+      q += ' casts' + fid + ': table(dataType: Casts, fightIDs: [' + fid + '])';
+      q += ' buffs' + fid + ': table(dataType: Buffs, fightIDs: [' + fid + '])';
+      q += ' dtaken' + fid + ': table(dataType: DamageTaken, fightIDs: [' + fid + '])';
+      q += ' dmg' + fid + ': table(dataType: DamageDone, fightIDs: [' + fid + '])';
+    });
+    q += ' } } }';
+    
+    var qFn = getWclUserToken() ? wclUserQuery : wclQuery;
+    qFn(q).then(function(data) {
+      if (!data || !data.reportData || !data.reportData.report) { completed++; if (completed >= reportCodes.length && callback) callback(allResults); return; }
+      var report = data.reportData.report;
+      
+      // Find sourceID
+      var sourceId = 0;
+      if (report.masterData && report.masterData.actors) {
+        report.masterData.actors.forEach(function(a) {
+          if (a.name.toLowerCase() === playerName.toLowerCase()) sourceId = a.id;
+        });
+      }
+      
+      fightIds.forEach(function(fid) {
+        var fight = fights.find(function(f) { return f.fightId === fid; });
+        if (!fight) return;
+        
+        // CPM — count total casts by this player
+        var castsData = report['casts' + fid];
+        if (castsData && castsData.data && castsData.data.entries) {
+          var playerCasts = 0;
+          castsData.data.entries.forEach(function(e) {
+            if (e.name && e.name.toLowerCase() === playerName.toLowerCase()) playerCasts = e.total || 0;
+            // Also check sub-entries
+            if (e.entries) e.entries.forEach(function(sub) { if (sub.name && sub.name.toLowerCase() === playerName.toLowerCase()) playerCasts += (sub.total || 0); });
+          });
+          // WCL Casts table returns ability breakdown, sum all abilities for total casts
+          var totalCasts = 0;
+          castsData.data.entries.forEach(function(e) {
+            if (sourceId && e.id === sourceId) totalCasts += (e.total || 0);
+            else if (e.name && e.name.toLowerCase() === playerName.toLowerCase()) totalCasts += (e.total || 0);
+          });
+          allResults.cpm.push({boss: fight.boss, date: fight.date, totalCasts: totalCasts, fightId: fid});
+        }
+        
+        // Consumables — check buffs at fight start
+        var buffsData = report['buffs' + fid];
+        if (buffsData && buffsData.data && buffsData.data.entries) {
+          var playerBuffs = [];
+          buffsData.data.entries.forEach(function(e) {
+            if (e.entries) e.entries.forEach(function(sub) {
+              if (sub.name && sub.name.toLowerCase() === playerName.toLowerCase()) playerBuffs.push(e.name);
+            });
+            // Direct check
+            if (e.name) playerBuffs.push(e.name);
+          });
+          var hasFlask = REQUIRED_CONSUMABLES.flasks.some(function(f) { return playerBuffs.some(function(b) { return b && b.indexOf(f) !== -1; }); });
+          var hasFood = REQUIRED_CONSUMABLES.food.some(function(f) { return playerBuffs.some(function(b) { return b && b.indexOf(f) !== -1; }); });
+          var hasPot = REQUIRED_CONSUMABLES.potions.some(function(f) { return playerBuffs.some(function(b) { return b && b.indexOf(f) !== -1; }); });
+          allResults.consumables.push({boss: fight.boss, date: fight.date, hasFlask: hasFlask, hasFood: hasFood, hasPot: hasPot, buffs: playerBuffs.slice(0, 30)});
+        }
+        
+        // Avoidable Damage — check DamageTaken abilities
+        var dtakenData = report['dtaken' + fid];
+        if (dtakenData && dtakenData.data && dtakenData.data.entries) {
+          dtakenData.data.entries.forEach(function(e) {
+            if (AVOIDABLE_ABILITIES[e.name]) {
+              // Check if this player took this damage
+              if (e.entries) e.entries.forEach(function(sub) {
+                if (sub.name && sub.name.toLowerCase() === playerName.toLowerCase()) {
+                  allResults.avoidable.push({boss: fight.boss, date: fight.date, ability: e.name, total: sub.total || 0, hits: sub.hitCount || sub.hits || 1});
+                }
+              });
+            }
+          });
+        }
+        
+        // Boss vs Total Damage (padding detection)
+        var dmgData = report['dmg' + fid];
+        if (dmgData && dmgData.data && dmgData.data.entries) {
+          var playerEntry = dmgData.data.entries.find(function(e) { return e.name && e.name.toLowerCase() === playerName.toLowerCase(); });
+          if (playerEntry) {
+            var totalDmg = playerEntry.total || 0;
+            // Check targets sub-breakdown if available
+            var bossDmg = totalDmg; // Default: all damage is boss damage
+            if (playerEntry.targets && playerEntry.targets.length) {
+              bossDmg = 0;
+              playerEntry.targets.forEach(function(t) {
+                // Boss targets typically have high total, but we just track all for now
+                bossDmg += t.total || 0;
+              });
+              // Take the highest single target as "boss" damage
+              var maxTarget = 0;
+              playerEntry.targets.forEach(function(t) { if ((t.total || 0) > maxTarget) maxTarget = t.total || 0; });
+              bossDmg = maxTarget;
+            }
+            allResults.bossDmg.push({boss: fight.boss, date: fight.date, totalDmg: totalDmg, bossDmg: bossDmg, paddingPct: totalDmg > 0 ? Math.round((1 - bossDmg / totalDmg) * 100) : 0});
+          }
+        }
+      });
+      
+      completed++;
+      if (completed >= reportCodes.length && callback) callback(allResults);
+    }).catch(function(err) {
+      console.log('Deep scan error for ' + code + ':', err);
+      completed++;
+      if (completed >= reportCodes.length && callback) callback(allResults);
+    });
+  });
+}
+
+// ─── ROSTER SCORECARD: Compute weighted score for all players ───
+function buildRosterScorecard(pd) {
+  var cards = [];
+  pd.sorted.forEach(function(name) {
+    var p = pd.players[name];
+    if (p.count < 2) return; // Need at least 2 fights
+    
+    var avgDPS = Math.round(p.totalDPS / p.count);
+    var avgParse = p.count ? Math.round(p.totalParse / p.count) : 0;
+    
+    // Consistency (CV%)
+    var variance = 0;
+    p.entries.forEach(function(e) { variance += Math.pow(e.dps - avgDPS, 2); });
+    var cv = p.count > 1 && avgDPS > 0 ? Math.sqrt(variance / p.count) / avgDPS * 100 : 0;
+    var consistencyScore = Math.max(0, 100 - cv * 3); // Lower CV = higher score
+    
+    // DPS rank among same class
+    var classPlayers = pd.sorted.filter(function(n) { return pd.players[n].cls === p.cls && pd.players[n].count >= 2; });
+    var classRank = classPlayers.indexOf(name) + 1;
+    var classPct = classPlayers.length > 1 ? Math.round((1 - (classRank - 1) / (classPlayers.length - 1)) * 100) : 50;
+    
+    // Deaths per fight
+    var deathsPerFight = p.count > 0 ? p.deaths / p.count : 0;
+    var survivalScore = Math.max(0, 100 - deathsPerFight * 40);
+    
+    // Attendance
+    var rosterEntry = GUILD_ROSTER.find(function(r) { return r.name === name; });
+    var attendance = rosterEntry ? rosterEntry.att : 0;
+    var attendanceScore = attendance;
+    
+    // DPS trend (improvement)
+    var dated = p.entries.filter(function(e) { return e.date; }).sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
+    var trend = linearRegression(dated.map(function(e) { return {y: e.dps}; }));
+    var improvementScore = trend.slope > 20 ? 90 : (trend.slope > 10 ? 75 : (trend.slope > 0 ? 60 : (trend.slope > -10 ? 40 : 20)));
+    
+    // Pressure performance
+    var pressure = calcPressurePerformance(p.entries);
+    
+    // Composite score (weighted)
+    var composite = Math.round(
+      consistencyScore * 0.20 +
+      survivalScore * 0.20 +
+      (avgParse || classPct) * 0.15 +
+      attendanceScore * 0.15 +
+      classPct * 0.10 +
+      improvementScore * 0.10 +
+      (pressure.choker ? 0 : 50) * 0.05 +
+      50 * 0.05 // Placeholder for consumables/CPM (filled by deep scan)
+    );
+    
+    cards.push({
+      name: name, cls: p.cls, avgDPS: avgDPS, bestDPS: p.bestDPS, avgParse: avgParse,
+      cv: Math.round(cv), consistencyScore: Math.round(consistencyScore),
+      deathsPerFight: Math.round(deathsPerFight * 100) / 100,
+      survivalScore: Math.round(survivalScore),
+      attendance: attendance, attendanceScore: Math.round(attendanceScore),
+      trend: trend, improvementScore: improvementScore,
+      pressure: pressure,
+      classRank: classRank, classTotal: classPlayers.length, classPct: classPct,
+      fights: p.count, totalDeaths: p.deaths,
+      composite: composite,
+      // Placeholders for deep scan data
+      cpm: null, consumableRate: null, avoidableRate: null, paddingPct: null
+    });
+  });
+  
+  // Sort by composite score
+  cards.sort(function(a, b) { return b.composite - a.composite; });
+  return cards;
+}
+
+// ─── RENDER: Roster Audit Tab ───
+function renderRosterAudit(pd) {
+  var cards = buildRosterScorecard(pd);
+  if (!cards.length) return '<div class="data-card" style="text-align:center;padding:40px;color:var(--text-sub)">Need at least 2 fights per player. Import more WCL reports.</div>';
+  
+  var h = '';
+  h += '<div class="data-card"><div class="data-card-header">\ud83c\udfc6 ROSTER SCORECARD \u2014 Method/Liquid-tier weighted analysis (click \ud83d\udd0d for deep scan)</div>';
+  h += '<div style="font-size:11px;color:var(--text-sub);margin-bottom:10px;font-family:Share Tech Mono,monospace">Weights: Consistency 20% \u2022 Survival 20% \u2022 Parse 15% \u2022 Attendance 15% \u2022 Class Rank 10% \u2022 Improvement 10% \u2022 Pressure 5% \u2022 Consumables 5%</div>';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#666;border-bottom:2px solid var(--border)">';
+  h += '<th style="text-align:left;padding:5px">#</th>';
+  h += '<th style="text-align:left;padding:5px">PLAYER</th>';
+  h += '<th style="text-align:right;padding:5px">SCORE</th>';
+  h += '<th style="text-align:right;padding:5px">AVG DPS</th>';
+  h += '<th style="text-align:right;padding:5px">CONSIST</th>';
+  h += '<th style="text-align:right;padding:5px">DEATHS/F</th>';
+  h += '<th style="text-align:right;padding:5px">ATT%</th>';
+  h += '<th style="text-align:right;padding:5px">TREND</th>';
+  h += '<th style="text-align:right;padding:5px">CLASS#</th>';
+  h += '<th style="text-align:right;padding:5px">PRESSURE</th>';
+  h += '<th style="text-align:center;padding:5px">SCAN</th>';
+  h += '</tr></thead><tbody>';
+  
+  cards.forEach(function(c, i) {
+    var cc = clsColorFor(c.cls);
+    var scoreColor = c.composite >= 80 ? '#ffd700' : (c.composite >= 65 ? 'var(--neon-green)' : (c.composite >= 50 ? 'var(--neon-cyan)' : (c.composite >= 35 ? 'var(--neon-orange)' : '#aa3344')));
+    var trendIcon = c.trend.direction === 'improving' ? '\u2191' : (c.trend.direction === 'declining' ? '\u2193' : '\u2192');
+    var trendColor = c.trend.direction === 'improving' ? 'var(--neon-green)' : (c.trend.direction === 'declining' ? '#aa3344' : 'var(--text-sub)');
+    var pressureText = c.pressure.choker ? '\u26a0 CHOKE' : (c.pressure.deltaPercent > 5 ? '\ud83d\udcaa CLUTCH' : 'OK');
+    var pressureColor = c.pressure.choker ? '#aa3344' : (c.pressure.deltaPercent > 5 ? 'var(--neon-green)' : 'var(--text-sub)');
+    
+    h += '<tr style="border-bottom:1px solid #1a1a34;cursor:pointer" onmouseover="this.style.background=\'rgba(0,240,255,0.03)\'" onmouseout="this.style.background=\'\'">';
+    h += '<td style="padding:5px;color:' + scoreColor + ';font-weight:900">' + (i + 1) + '</td>';
+    h += '<td style="padding:5px"><span style="color:' + cc + ';font-weight:900;cursor:pointer" onclick="window._perfPlayer=\'' + c.name.replace(/'/g, "\\'") + '\';switchView(\'performance\')">' + c.name + '</span> <span style="color:' + cc + ';font-size:9px">' + c.cls + '</span></td>';
+    h += '<td style="padding:5px;text-align:right"><span style="color:' + scoreColor + ';font-weight:900;font-size:14px">' + c.composite + '</span></td>';
+    h += '<td style="padding:5px;text-align:right;color:var(--neon-cyan)">' + c.avgDPS.toLocaleString() + '</td>';
+    h += '<td style="padding:5px;text-align:right;color:' + (c.cv <= 10 ? 'var(--neon-green)' : (c.cv <= 20 ? 'var(--neon-cyan)' : 'var(--neon-orange)')) + '">\u00b1' + c.cv + '%</td>';
+    h += '<td style="padding:5px;text-align:right;color:' + (c.deathsPerFight <= 0.1 ? 'var(--neon-green)' : (c.deathsPerFight <= 0.3 ? 'var(--neon-cyan)' : '#aa3344')) + '">' + c.deathsPerFight + '</td>';
+    h += '<td style="padding:5px;text-align:right;color:' + (c.attendance >= 80 ? 'var(--neon-green)' : (c.attendance >= 50 ? 'var(--neon-orange)' : '#aa3344')) + '">' + c.attendance + '%</td>';
+    h += '<td style="padding:5px;text-align:right;color:' + trendColor + '">' + trendIcon + ' ' + (c.trend.slope > 0 ? '+' : '') + c.trend.slope + '</td>';
+    h += '<td style="padding:5px;text-align:right">#' + c.classRank + '/' + c.classTotal + '</td>';
+    h += '<td style="padding:5px;text-align:right;color:' + pressureColor + ';font-size:10px">' + pressureText + '</td>';
+    h += '<td style="padding:5px;text-align:center"><button style="background:none;border:1px solid var(--neon-cyan);color:var(--neon-cyan);font-size:10px;padding:2px 6px;cursor:pointer;font-family:Share Tech Mono,monospace" onclick="event.stopPropagation();runDeepScan(\'' + c.name.replace(/'/g, "\\'") + '\')">\ud83d\udd0d</button></td>';
+    h += '</tr>';
+  });
+  
+  h += '</tbody></table></div>';
+  
+  // Score distribution
+  var tiers = [{label:'ELITE (80+)',min:80,color:'#ffd700',count:0},{label:'STRONG (65-79)',min:65,color:'var(--neon-green)',count:0},{label:'SOLID (50-64)',min:50,color:'var(--neon-cyan)',count:0},{label:'NEEDS WORK (35-49)',min:35,color:'var(--neon-orange)',count:0},{label:'AT RISK (<35)',min:0,color:'#aa3344',count:0}];
+  cards.forEach(function(c) {
+    for (var t = 0; t < tiers.length; t++) { if (c.composite >= tiers[t].min) { tiers[t].count++; break; } }
+  });
+  var tierItems = tiers.filter(function(t) { return t.count > 0; }).map(function(t) { return {label: t.label, value: t.count, color: t.color}; });
+  h += '<div class="data-card"><div class="data-card-header">ROSTER TIER DISTRIBUTION</div>' + svgBarH(tierItems, {w: 600, padL: 180, padR: 40, barH: 28}) + '</div>';
+  
+  return h;
+}
+
+// ─── RENDER: Head-to-Head Comparison ───
+function renderH2H(pd) {
+  var h = '';
+  if (!window._h2hA) window._h2hA = '';
+  if (!window._h2hB) window._h2hB = '';
+  var pArr = pd.sorted;
+  
+  // Player selectors
+  h += '<div class="data-card"><div class="data-card-header">\u2694 HEAD-TO-HEAD \u2014 Compare two players for a roster spot</div>';
+  h += '<div style="display:flex;gap:16px;margin-bottom:12px;align-items:center">';
+  h += '<div style="flex:1"><label style="font-size:10px;color:#666;letter-spacing:1px">PLAYER A</label><select id="h2hSelectA" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid var(--neon-cyan);color:var(--neon-cyan);padding:6px" onchange="window._h2hA=this.value;switchView(\'performance\')">';
+  h += '<option value="">-- Select --</option>';
+  pArr.forEach(function(n) { var p = pd.players[n]; h += '<option value="' + n + '"' + (window._h2hA === n ? ' selected' : '') + ' style="color:' + clsColorFor(p.cls) + '">' + n + ' (' + p.cls + ')</option>'; });
+  h += '</select></div>';
+  h += '<div style="font-family:Orbitron,sans-serif;font-size:20px;color:var(--neon-red);font-weight:900">VS</div>';
+  h += '<div style="flex:1"><label style="font-size:10px;color:#666;letter-spacing:1px">PLAYER B</label><select id="h2hSelectB" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid var(--neon-orange);color:var(--neon-orange);padding:6px" onchange="window._h2hB=this.value;switchView(\'performance\')">';
+  h += '<option value="">-- Select --</option>';
+  pArr.forEach(function(n) { var p = pd.players[n]; h += '<option value="' + n + '"' + (window._h2hB === n ? ' selected' : '') + ' style="color:' + clsColorFor(p.cls) + '">' + n + ' (' + p.cls + ')</option>'; });
+  h += '</select></div>';
+  h += '</div>';
+  
+  if (!window._h2hA || !window._h2hB || window._h2hA === window._h2hB) {
+    h += '<div style="text-align:center;padding:30px;color:var(--text-sub)">Select two different players to compare</div>';
+    h += '</div>';
+    return h;
+  }
+  
+  var a = pd.players[window._h2hA], b = pd.players[window._h2hB];
+  if (!a || !b) { h += '</div>'; return h; }
+  
+  var aAvg = Math.round(a.totalDPS / a.count), bAvg = Math.round(b.totalDPS / b.count);
+  var aParse = Math.round(a.totalParse / a.count), bParse = Math.round(b.totalParse / b.count);
+  var aDpf = a.count > 0 ? Math.round(a.deaths / a.count * 100) / 100 : 0;
+  var bDpf = b.count > 0 ? Math.round(b.deaths / b.count * 100) / 100 : 0;
+  var aVar = 0, bVar = 0;
+  a.entries.forEach(function(e) { aVar += Math.pow(e.dps - aAvg, 2); });
+  b.entries.forEach(function(e) { bVar += Math.pow(e.dps - bAvg, 2); });
+  var aCV = a.count > 1 && aAvg > 0 ? Math.round(Math.sqrt(aVar / a.count) / aAvg * 100) : 0;
+  var bCV = b.count > 1 && bAvg > 0 ? Math.round(Math.sqrt(bVar / b.count) / bAvg * 100) : 0;
+  var aAtt = GUILD_ROSTER.find(function(r) { return r.name === window._h2hA; });
+  var bAtt = GUILD_ROSTER.find(function(r) { return r.name === window._h2hB; });
+  var aDated = a.entries.filter(function(e){return e.date;}).sort(function(x,y){return(x.date||'').localeCompare(y.date||'');});
+  var bDated = b.entries.filter(function(e){return e.date;}).sort(function(x,y){return(x.date||'').localeCompare(y.date||'');});
+  var aTrend = linearRegression(aDated.map(function(e){return{y:e.dps};}));
+  var bTrend = linearRegression(bDated.map(function(e){return{y:e.dps};}));
+  var aPressure = calcPressurePerformance(a.entries);
+  var bPressure = calcPressurePerformance(b.entries);
+  
+  // Comparison rows
+  var rows = [
+    {metric: 'Avg DPS', a: aAvg.toLocaleString(), b: bAvg.toLocaleString(), aWin: aAvg > bAvg, bWin: bAvg > aAvg},
+    {metric: 'Best DPS', a: a.bestDPS.toLocaleString(), b: b.bestDPS.toLocaleString(), aWin: a.bestDPS > b.bestDPS, bWin: b.bestDPS > a.bestDPS},
+    {metric: 'Avg Parse', a: aParse + '%', b: bParse + '%', aWin: aParse > bParse, bWin: bParse > aParse},
+    {metric: 'Consistency (\u00b1CV)', a: '\u00b1' + aCV + '%', b: '\u00b1' + bCV + '%', aWin: aCV < bCV, bWin: bCV < aCV},
+    {metric: 'Deaths/Fight', a: aDpf.toString(), b: bDpf.toString(), aWin: aDpf < bDpf, bWin: bDpf < aDpf},
+    {metric: 'Attendance', a: (aAtt ? aAtt.att : '?') + '%', b: (bAtt ? bAtt.att : '?') + '%', aWin: (aAtt?aAtt.att:0) > (bAtt?bAtt.att:0), bWin: (bAtt?bAtt.att:0) > (aAtt?aAtt.att:0)},
+    {metric: 'Trend (DPS/week)', a: (aTrend.slope > 0 ? '+' : '') + aTrend.slope, b: (bTrend.slope > 0 ? '+' : '') + bTrend.slope, aWin: aTrend.slope > bTrend.slope, bWin: bTrend.slope > aTrend.slope},
+    {metric: 'Under Pressure', a: aPressure.choker ? 'CHOKES' : 'OK', b: bPressure.choker ? 'CHOKES' : 'OK', aWin: !aPressure.choker && bPressure.choker, bWin: !bPressure.choker && aPressure.choker},
+    {metric: 'Fights Logged', a: a.count.toString(), b: b.count.toString(), aWin: a.count > b.count, bWin: b.count > a.count}
+  ];
+  
+  var aWins = 0, bWins = 0;
+  rows.forEach(function(r) { if (r.aWin) aWins++; if (r.bWin) bWins++; });
+  
+  var ccA = clsColorFor(a.cls), ccB = clsColorFor(b.cls);
+  
+  h += '<table style="width:100%;border-collapse:collapse;font-size:13px;font-family:Share Tech Mono,monospace">';
+  h += '<thead><tr><th style="width:30%;text-align:left;padding:8px;color:var(--neon-cyan);font-size:16px;border-bottom:2px solid var(--neon-cyan)">' + window._h2hA + ' <span style="font-size:11px;color:' + ccA + '">' + a.cls + '</span></th>';
+  h += '<th style="width:40%;text-align:center;padding:8px;color:var(--text-sub)">METRIC</th>';
+  h += '<th style="width:30%;text-align:right;padding:8px;color:var(--neon-orange);font-size:16px;border-bottom:2px solid var(--neon-orange)">' + window._h2hB + ' <span style="font-size:11px;color:' + ccB + '">' + b.cls + '</span></th></tr></thead><tbody>';
+  
+  rows.forEach(function(r) {
+    h += '<tr style="border-bottom:1px solid #1a1a34">';
+    h += '<td style="padding:6px 8px;font-weight:900;color:' + (r.aWin ? 'var(--neon-green)' : (r.bWin ? '#555' : 'var(--text)')) + '">' + (r.aWin ? '\u2705 ' : '') + r.a + '</td>';
+    h += '<td style="padding:6px 8px;text-align:center;color:var(--text-sub);font-size:11px">' + r.metric + '</td>';
+    h += '<td style="padding:6px 8px;text-align:right;font-weight:900;color:' + (r.bWin ? 'var(--neon-green)' : (r.aWin ? '#555' : 'var(--text)')) + '">' + r.b + (r.bWin ? ' \u2705' : '') + '</td>';
+    h += '</tr>';
+  });
+  
+  h += '</tbody></table>';
+  
+  // Winner banner
+  var winner = aWins > bWins ? window._h2hA : (bWins > aWins ? window._h2hB : 'TIE');
+  var winColor = aWins > bWins ? 'var(--neon-cyan)' : (bWins > aWins ? 'var(--neon-orange)' : 'var(--text-sub)');
+  h += '<div style="text-align:center;padding:16px;margin-top:12px;border:2px solid ' + winColor + '">';
+  h += '<div style="font-family:Orbitron,sans-serif;font-size:12px;color:var(--text-sub);letter-spacing:2px">VERDICT</div>';
+  h += '<div style="font-family:Orbitron,sans-serif;font-size:24px;color:' + winColor + ';font-weight:900">' + winner + '</div>';
+  h += '<div style="font-size:12px;color:var(--text-sub)">' + aWins + ' \u2014 ' + (rows.length - aWins - bWins) + ' \u2014 ' + bWins + '</div>';
+  h += '</div>';
+  
+  h += '</div>';
+  return h;
+}
+
+// ─── DEEP SCAN UI ───
+function runDeepScan(playerName) {
+  toast('\ud83d\udd0d Deep scanning ' + playerName + '...');
+  deepScanPlayer(playerName, function(results) {
+    if (!results) { toast('\u274c No data for ' + playerName); return; }
+    
+    // Build results popup
+    var rh = '<div id="deepScanOverlay" style="position:fixed;inset:0;background:rgba(5,5,20,0.95);z-index:300;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px" onclick="if(event.target===this)this.remove()">';
+    rh += '<div style="background:#111118;border:2px solid var(--neon-cyan);width:700px;max-width:95vw;margin:20px auto">';
+    rh += '<div style="padding:12px 20px;border-bottom:2px solid #2a2a44;display:flex;justify-content:space-between;align-items:center">';
+    rh += '<span style="font-family:Orbitron,sans-serif;font-size:14px;color:var(--neon-cyan);letter-spacing:2px">\ud83d\udd0d DEEP SCAN \u2014 ' + playerName + '</span>';
+    rh += '<button onclick="document.getElementById(\'deepScanOverlay\').remove()" style="background:none;border:none;color:#ff2244;font-size:22px;cursor:pointer">\u00d7</button></div>';
+    rh += '<div style="padding:16px 20px;font-family:Share Tech Mono,monospace;font-size:12px">';
+    rh += '<div style="color:var(--text-sub);margin-bottom:10px">Analyzed ' + results.totalFights + ' recent fights</div>';
+    
+    // CPM
+    if (results.cpm.length) {
+      var avgCPM = 0;
+      results.cpm.forEach(function(c) { avgCPM += c.totalCasts; });
+      avgCPM = Math.round(avgCPM / results.cpm.length);
+      rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+      rh += '<div style="font-weight:900;color:var(--neon-cyan);margin-bottom:4px">\u23f1 CASTS PER FIGHT: ' + avgCPM + '</div>';
+      rh += '<div style="color:var(--text-sub);font-size:11px">Higher = more active. Compare within same class.</div>';
+      rh += '</div>';
+    }
+    
+    // Consumables
+    if (results.consumables.length) {
+      var flaskRate = Math.round(results.consumables.filter(function(c) { return c.hasFlask; }).length / results.consumables.length * 100);
+      var foodRate = Math.round(results.consumables.filter(function(c) { return c.hasFood; }).length / results.consumables.length * 100);
+      var potRate = Math.round(results.consumables.filter(function(c) { return c.hasPot; }).length / results.consumables.length * 100);
+      var consColor = flaskRate >= 80 ? 'var(--neon-green)' : (flaskRate >= 50 ? 'var(--neon-orange)' : '#aa3344');
+      rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+      rh += '<div style="font-weight:900;color:' + consColor + ';margin-bottom:4px">\ud83e\uddea CONSUMABLE COMPLIANCE</div>';
+      rh += '<div>Flask/Elixir: <span style="color:' + consColor + ';font-weight:900">' + flaskRate + '%</span> of fights</div>';
+      rh += '<div>Food Buff: <span style="color:' + (foodRate >= 80 ? 'var(--neon-green)' : 'var(--neon-orange)') + ';font-weight:900">' + foodRate + '%</span> of fights</div>';
+      rh += '<div>Combat Pot: <span style="font-weight:900">' + potRate + '%</span> of fights</div>';
+      rh += '</div>';
+    }
+    
+    // Avoidable Damage
+    if (results.avoidable.length) {
+      rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #aa3344">';
+      rh += '<div style="font-weight:900;color:#aa3344;margin-bottom:4px">\u26a0 AVOIDABLE DAMAGE TAKEN (' + results.avoidable.length + ' incidents)</div>';
+      var abilityCounts = {};
+      results.avoidable.forEach(function(a) {
+        if (!abilityCounts[a.ability]) abilityCounts[a.ability] = {count: 0, total: 0};
+        abilityCounts[a.ability].count += a.hits;
+        abilityCounts[a.ability].total += a.total;
+      });
+      Object.keys(abilityCounts).forEach(function(ab) {
+        rh += '<div style="color:var(--neon-orange)">' + ab + ': <span style="color:#aa3344;font-weight:900">' + abilityCounts[ab].count + ' hits</span> (' + Math.round(abilityCounts[ab].total / 1000) + 'k damage)</div>';
+      });
+      rh += '</div>';
+    } else {
+      rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid var(--neon-green)">';
+      rh += '<div style="font-weight:900;color:var(--neon-green)">\u2705 ZERO avoidable damage taken</div>';
+      rh += '</div>';
+    }
+    
+    // Padding
+    if (results.bossDmg.length) {
+      var avgPadding = 0;
+      results.bossDmg.forEach(function(d) { avgPadding += d.paddingPct; });
+      avgPadding = Math.round(avgPadding / results.bossDmg.length);
+      var padColor = avgPadding <= 5 ? 'var(--neon-green)' : (avgPadding <= 15 ? 'var(--neon-cyan)' : (avgPadding <= 25 ? 'var(--neon-orange)' : '#aa3344'));
+      rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+      rh += '<div style="font-weight:900;color:' + padColor + ';margin-bottom:4px">\ud83c\udfaf BOSS FOCUS: ' + (100 - avgPadding) + '% on boss</div>';
+      rh += '<div style="color:var(--text-sub);font-size:11px">' + avgPadding + '% damage on non-boss targets (padding). Lower is better.</div>';
+      rh += '</div>';
+    }
+    
+    rh += '</div></div></div>';
+    document.body.insertAdjacentHTML('beforeend', rh);
+    toast('\u2705 Deep scan complete for ' + playerName);
+  });
+}
 
 
 
