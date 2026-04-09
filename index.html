@@ -4524,8 +4524,48 @@ function importWCLReportSilent(reportCode, callback) {
                 });
               });
             });
-            quickSave();
-            if (callback) callback();
+            // Now fetch parse % via rankings query
+            var killFightIds = killFights.map(function(f) { return f.id; });
+            var rankQuery = '{ reportData { report(code: "' + reportCode + '") { rankings(fightIDs: [' + killFightIds.join(',') + ']) } } }';
+            wclQuery(rankQuery).then(function(rankData) {
+              if (rankData && rankData.reportData && rankData.reportData.report && rankData.reportData.report.rankings) {
+                var rankingsArr = rankData.reportData.report.rankings.data || rankData.reportData.report.rankings;
+                if (Array.isArray(rankingsArr)) {
+                  rankingsArr.forEach(function(r) {
+                    if (!r.fightID || !r.roles) return;
+                    ['dps','healers','tanks'].forEach(function(role) {
+                      if (!r.roles[role] || !r.roles[role].characters) return;
+                      r.roles[role].characters.forEach(function(ch) {
+                        if (!ch.name || !ch.rankPercent) return;
+                        // Find matching growth entry and update parse
+                        var fight = killFights.find(function(f) { return f.id === r.fightID; });
+                        if (!fight) return;
+                        var fl = fight.name.toLowerCase();
+                        RAIDS.forEach(function(raid) {
+                          raid.bosses.forEach(function(boss) {
+                            var bl = boss.name.toLowerCase();
+                            var s = 0;
+                            if (bl === fl) s = 100;
+                            else if (bl.includes(fl) || fl.includes(bl)) s = 80;
+                            else { fl.split(' ').forEach(function(w){if(w.length>2&&bl.includes(w))s+=20;}); }
+                            if (s < 40) return;
+                            var gKey = raid.id + '_' + boss.id;
+                            if (!assignments[gKey] || !assignments[gKey].growth) return;
+                            assignments[gKey].growth.forEach(function(g) {
+                              if (g.reportCode === reportCode && g.fightId === r.fightID && g.player.toLowerCase() === ch.name.toLowerCase()) {
+                                g.parse = Math.round(ch.rankPercent);
+                              }
+                            });
+                          });
+                        });
+                      });
+                    });
+                  });
+                }
+              }
+              quickSave();
+              if (callback) callback();
+            }).catch(function() { quickSave(); if (callback) callback(); });
           })
           .catch(function() { if (callback) callback(); });
       } else {
@@ -4783,10 +4823,39 @@ function importWCLReport(reportCode) {
               });
             });
             
-            renderBoss();
-            quickSave();
-            toast('✅ DPS data imported for ' + killFights.length + ' kills');
-            quickSave();
+            // Fetch parse % via rankings
+            var sKillIds = killFights.map(function(f) { return f.id; });
+            var sRankQ = '{ reportData { report(code: "' + reportCode + '") { rankings(fightIDs: [' + sKillIds.join(',') + ']) } } }';
+            wclQuery(sRankQ).then(function(sRD) {
+              if (sRD && sRD.reportData && sRD.reportData.report && sRD.reportData.report.rankings) {
+                var sRA = sRD.reportData.report.rankings.data || sRD.reportData.report.rankings;
+                if (Array.isArray(sRA)) sRA.forEach(function(r) {
+                  if (!r.fightID || !r.roles) return;
+                  ['dps','healers','tanks'].forEach(function(role) {
+                    if (!r.roles[role] || !r.roles[role].characters) return;
+                    r.roles[role].characters.forEach(function(ch) {
+                      if (!ch.name || !ch.rankPercent) return;
+                      var sf = killFights.find(function(f) { return f.id === r.fightID; });
+                      if (!sf) return;
+                      var sfl = sf.name.toLowerCase();
+                      RAIDS.forEach(function(raid) { raid.bosses.forEach(function(boss) {
+                        var sbl = boss.name.toLowerCase(), ss = 0;
+                        if (sbl === sfl) ss = 100; else if (sbl.includes(sfl) || sfl.includes(sbl)) ss = 80;
+                        else { sfl.split(' ').forEach(function(w){if(w.length>2&&sbl.includes(w))ss+=20;}); }
+                        if (ss < 40) return;
+                        var sgK = raid.id + '_' + boss.id;
+                        if (!assignments[sgK] || !assignments[sgK].growth) return;
+                        assignments[sgK].growth.forEach(function(g) {
+                          if (g.reportCode === reportCode && g.fightId === r.fightID && g.player.toLowerCase() === ch.name.toLowerCase()) g.parse = Math.round(ch.rankPercent);
+                        });
+                      }); });
+                    });
+                  });
+                });
+              }
+              renderBoss(); quickSave();
+              toast('\u2705 DPS + Parse data imported for ' + killFights.length + ' kills');
+            }).catch(function() { renderBoss(); quickSave(); toast('\u2705 DPS data imported'); });
           })
           .catch(function(e) { console.log('DPS import error:', e); });
       }
@@ -8653,6 +8722,18 @@ var REQUIRED_CONSUMABLES = {
   potions: ['Destruction Potion','Haste Potion','Super Mana Potion','Ironshield Potion','Flame Cap']
 };
 
+var CLASS_COOLDOWNS = {
+  Mage: ['Combustion','Icy Veins','Arcane Power','Presence of Mind','Cold Snap','Evocation'],
+  Rogue: ['Adrenaline Rush','Blade Flurry','Cold Blood','Evasion','Vanish'],
+  Hunter: ['Bestial Wrath','Rapid Fire','Kill Command','Intimidation','Readiness'],
+  Warlock: ['Demonic Sacrifice','Inferno','Ritual of Doom','Curse of Doom'],
+  Warrior: ['Recklessness','Death Wish','Sweeping Strikes','Shield Wall','Last Stand'],
+  Shaman: ['Bloodlust','Heroism','Shamanistic Rage','Nature\'s Swiftness','Mana Tide Totem','Earth Elemental Totem','Fire Elemental Totem'],
+  Priest: ['Inner Focus','Power Infusion','Shadowfiend','Pain Suppression'],
+  Druid: ['Innervate','Nature\'s Swiftness','Force of Nature','Barkskin'],
+  Paladin: ['Avenging Wrath','Divine Shield','Lay on Hands','Divine Favor','Holy Shield']
+};
+
 // ─── LINEAR REGRESSION (trend slope) ───
 function linearRegression(points) {
   var n = points.length;
@@ -8751,7 +8832,7 @@ function deepScanPlayer(playerName, callback) {
     byReport[f.reportCode].push(f);
   });
   
-  var allResults = {cpm: [], consumables: [], avoidable: [], bossDmg: [], totalFights: recentFights.length, playerName: playerName};
+  var allResults = {cpm: [], consumables: [], avoidable: [], bossDmg: [], abilities: [], cooldowns: [], totalFights: recentFights.length, playerName: playerName};
   var reportCodes = Object.keys(byReport);
   var completed = 0;
   
@@ -8788,22 +8869,58 @@ function deepScanPlayer(playerName, callback) {
         var fight = fights.find(function(f) { return f.fightId === fid; });
         if (!fight) return;
         
-        // CPM — count total casts by this player
+        // CPM — count total casts + per-ability breakdown + cooldown tracking
         var castsData = report['casts' + fid];
         if (castsData && castsData.data && castsData.data.entries) {
-          var playerCasts = 0;
-          castsData.data.entries.forEach(function(e) {
-            if (e.name && e.name.toLowerCase() === playerName.toLowerCase()) playerCasts = e.total || 0;
-            // Also check sub-entries
-            if (e.entries) e.entries.forEach(function(sub) { if (sub.name && sub.name.toLowerCase() === playerName.toLowerCase()) playerCasts += (sub.total || 0); });
-          });
-          // WCL Casts table returns ability breakdown, sum all abilities for total casts
           var totalCasts = 0;
+          var abilityMap = {};
+          
           castsData.data.entries.forEach(function(e) {
-            if (sourceId && e.id === sourceId) totalCasts += (e.total || 0);
-            else if (e.name && e.name.toLowerCase() === playerName.toLowerCase()) totalCasts += (e.total || 0);
+            // Check if this entry is the player (player-first format)
+            var isPlayer = (e.name && e.name.toLowerCase() === playerName.toLowerCase()) || (sourceId && e.id === sourceId);
+            if (isPlayer) {
+              totalCasts += (e.total || 0);
+              // Sub-entries are abilities
+              if (e.entries) e.entries.forEach(function(ab) {
+                if (ab.name) abilityMap[ab.name] = (abilityMap[ab.name] || 0) + (ab.total || 0);
+              });
+            }
+            // Check if this entry is an ability (ability-first format) with player in sub-entries
+            if (e.entries && !isPlayer) {
+              e.entries.forEach(function(sub) {
+                var isSubPlayer = (sub.name && sub.name.toLowerCase() === playerName.toLowerCase()) || (sourceId && sub.id === sourceId);
+                if (isSubPlayer && e.name) {
+                  totalCasts += (sub.total || 0);
+                  abilityMap[e.name] = (abilityMap[e.name] || 0) + (sub.total || 0);
+                }
+              });
+            }
           });
+          
           allResults.cpm.push({boss: fight.boss, date: fight.date, totalCasts: totalCasts, fightId: fid});
+          
+          // Store per-ability data
+          Object.keys(abilityMap).forEach(function(ab) {
+            allResults.abilities.push({boss: fight.boss, date: fight.date, ability: ab, casts: abilityMap[ab], fightId: fid});
+          });
+          
+          // Check cooldown usage
+          var playerCls = '';
+          recentFights.forEach(function(rf) { if (rf.fightId === fid) playerCls = rf.cls || ''; });
+          if (!playerCls) {
+            var gEntry = null;
+            RAIDS.forEach(function(r) { r.bosses.forEach(function(b) {
+              var k = r.id + '_' + b.id;
+              if (assignments[k] && assignments[k].growth) assignments[k].growth.forEach(function(g) {
+                if (g.player === playerName && g.cls) playerCls = g.cls;
+              });
+            }); });
+          }
+          var classCDs = CLASS_COOLDOWNS[playerCls] || [];
+          classCDs.forEach(function(cd) {
+            var used = abilityMap[cd] || 0;
+            if (used > 0) allResults.cooldowns.push({boss: fight.boss, date: fight.date, cooldown: cd, uses: used, fightId: fid});
+          });
         }
         
         // Consumables — check buffs at fight start
@@ -9169,6 +9286,69 @@ function runDeepScan(playerName) {
       rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
       rh += '<div style="font-weight:900;color:' + padColor + ';margin-bottom:4px">\ud83c\udfaf BOSS FOCUS: ' + (100 - avgPadding) + '% on boss</div>';
       rh += '<div style="color:var(--text-sub);font-size:11px">' + avgPadding + '% damage on non-boss targets (padding). Lower is better.</div>';
+      rh += '</div>';
+    }
+    
+    // Ability Breakdown — top abilities by cast count
+    if (results.abilities && results.abilities.length) {
+      var abTotals = {};
+      results.abilities.forEach(function(a) {
+        if (!abTotals[a.ability]) abTotals[a.ability] = 0;
+        abTotals[a.ability] += a.casts;
+      });
+      var abSorted = Object.keys(abTotals).map(function(k) { return {name: k, total: abTotals[k]}; })
+        .sort(function(a, b) { return b.total - a.total; }).slice(0, 15);
+      var maxAb = abSorted.length ? abSorted[0].total : 1;
+      rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+      rh += '<div style="font-weight:900;color:var(--neon-cyan);margin-bottom:8px">\u2694 TOP ABILITIES (across ' + results.totalFights + ' fights)</div>';
+      abSorted.forEach(function(ab) {
+        var pct = Math.round(ab.total / maxAb * 100);
+        var avgPerFight = (ab.total / results.totalFights).toFixed(1);
+        rh += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">';
+        rh += '<div style="width:140px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;color:var(--text-bright);font-size:11px" title="' + ab.name + '">' + ab.name + '</div>';
+        rh += '<div style="flex:1;height:12px;background:#1a1a2e;border-radius:2px;overflow:hidden"><div style="width:' + pct + '%;height:100%;background:var(--neon-cyan);opacity:0.7"></div></div>';
+        rh += '<div style="width:70px;text-align:right;font-size:10px;color:var(--text-sub)">' + ab.total + ' <span style="color:#555">(' + avgPerFight + '/f)</span></div>';
+        rh += '</div>';
+      });
+      rh += '</div>';
+    }
+    
+    // Cooldown Efficiency
+    if (results.cooldowns && results.cooldowns.length) {
+      var cdTotals = {};
+      results.cooldowns.forEach(function(c) {
+        if (!cdTotals[c.cooldown]) cdTotals[c.cooldown] = {total: 0, fights: 0};
+        cdTotals[c.cooldown].total += c.uses;
+        cdTotals[c.cooldown].fights++;
+      });
+      rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+      rh += '<div style="font-weight:900;color:var(--neon-orange);margin-bottom:8px">\u23f0 COOLDOWN USAGE</div>';
+      Object.keys(cdTotals).forEach(function(cd) {
+        var avg = (cdTotals[cd].total / results.totalFights).toFixed(1);
+        var usedIn = Math.round(cdTotals[cd].fights / results.totalFights * 100);
+        var cdColor = usedIn >= 80 ? 'var(--neon-green)' : (usedIn >= 50 ? 'var(--neon-orange)' : '#aa3344');
+        rh += '<div style="display:flex;justify-content:space-between;margin-bottom:2px">';
+        rh += '<span style="color:var(--text-bright)">' + cd + '</span>';
+        rh += '<span style="color:' + cdColor + ';font-weight:900">' + avg + '/fight \u2022 used in ' + usedIn + '% of fights</span>';
+        rh += '</div>';
+      });
+      rh += '</div>';
+    }
+    
+    // Ability Trends — show CPM per fight over time
+    if (results.cpm.length > 1) {
+      rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+      rh += '<div style="font-weight:900;color:var(--neon-green);margin-bottom:8px">\ud83d\udcc8 ACTIVITY TREND (casts per fight)</div>';
+      var maxCasts = 0;
+      results.cpm.forEach(function(c) { if (c.totalCasts > maxCasts) maxCasts = c.totalCasts; });
+      var barW = Math.floor(90 / results.cpm.length);
+      rh += '<div style="display:flex;align-items:flex-end;gap:2px;height:60px">';
+      results.cpm.slice().reverse().forEach(function(c) {
+        var h = maxCasts > 0 ? Math.round(c.totalCasts / maxCasts * 55) : 5;
+        rh += '<div title="' + c.boss + ' (' + c.date + '): ' + c.totalCasts + ' casts" style="flex:1;max-width:' + barW + '%;min-width:8px;height:' + h + 'px;background:var(--neon-cyan);opacity:0.7;border-radius:2px 2px 0 0"></div>';
+      });
+      rh += '</div>';
+      rh += '<div style="display:flex;justify-content:space-between;font-size:9px;color:#555;margin-top:2px"><span>Oldest</span><span>Recent</span></div>';
       rh += '</div>';
     }
     
