@@ -5870,7 +5870,7 @@ function svgStackedBar(segments, opts) {
   segments.forEach(function(s){
     var pct=(s.value/total*100).toFixed(1);
     if(pct<0.5)return;
-    sv+='<div style="width:'+pct+'%;background:'+s.color+';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;font-family:Share Tech Mono,monospace;min-width:20px" title="'+s.label+': '+s.value+' ('+pct+'%)'>';
+    sv+='<div style="width:'+pct+'%;background:'+s.color+';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;font-family:Share Tech Mono,monospace;min-width:20px" title="'+s.label+': '+s.value+' ('+pct+'%)">';
     if(parseFloat(pct)>8)sv+=s.label+' '+Math.round(pct)+'%';
     sv+='</div>';
   });
