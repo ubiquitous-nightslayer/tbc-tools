@@ -611,7 +611,7 @@ function toggleToolbarDrop(btn) {
 }
 // Close dropdowns when clicking outside
 document.addEventListener('click', function(e) {
-  if (!e.target.closest('.toolbar-group')) {
+  if (!e.target.closest('.toolbar-group') && !e.target.closest('.raid-tab') && !e.target.closest('.raid-boss-dropdown')) {
     document.querySelectorAll('.toolbar-group.open').forEach(function(g) { g.classList.remove('open'); });
     document.querySelectorAll('.raid-boss-dropdown').forEach(function(d) { d.style.display = 'none'; });
   }
@@ -3564,19 +3564,35 @@ function updateGuildDisplay() {
 function spCopyForOfficers() {
   var cfg = getGuildConfig();
   var url = window.location.origin + window.location.pathname;
-  var text = '=== ' + (cfg.guildName||'Guild') + ' TBC Assignment Sheet ===\n\n';
-  text += 'SITE: ' + url + '\n\n';
-  text += '--- OFFICER SETUP ---\n';
-  text += 'Open the site > click SETUP > paste these:\n';
-  text += 'Gist ID: ' + (cfg.gistId||'NOT SET') + '\n';
-  text += 'GitHub Token: ' + (cfg.gistToken||'NOT SET') + '\n\n';
-  text += '--- RAIDER LINK (view only) ---\n';
-  text += url + '?gist=' + (cfg.gistId||'') + (cfg.guildName ? '&guild='+encodeURIComponent(cfg.guildName) : '') + '\n';
-  navigator.clipboard.writeText(text).then(function() {
-    toast('\u2705 Officer setup info copied to clipboard!');
-    var s = document.getElementById('sp_actionStatus');
-    if (s) s.innerHTML = '<span style="color:var(--neon-green)">\u2705 Copied! DM this to your officers.</span>';
-  });
+  var guildName = cfg.guildName || (_guild ? _guild.name : 'Guild');
+  
+  // If logged in with guild, generate invite code automatically
+  if (_sb && _guild && (_guildRole === 'gm' || _guildRole === 'officer')) {
+    generateInviteCode('officer').then(function(code) {
+      var text = '\u2550\u2550\u2550 ' + guildName + ' \u2014 TBC Assignment Sheet \u2550\u2550\u2550\n\n';
+      text += 'You\u2019ve been invited as OFFICER.\n\n';
+      text += 'STEP 1: Go to the site:\n' + url + '\n\n';
+      text += 'STEP 2: Click the \ud83d\udd10 LOGIN button (top right)\n\n';
+      text += 'STEP 3: Click "LOGIN WITH DISCORD"\n\n';
+      text += 'STEP 4: Enter this invite code:\n\n';
+      text += '    \ud83c\udf9f  ' + code + '\n\n';
+      text += 'STEP 5: Click JOIN. Done!\n\n';
+      text += 'Code expires in 7 days. \u2022 Role: OFFICER';
+      navigator.clipboard.writeText(text).then(function() {
+        toast('\u2705 Officer invite copied! DM it to them.');
+      });
+    }).catch(function(e) {
+      toast('\u274c ' + e.message);
+    });
+  } else {
+    // Fallback: just copy the site link
+    var text = '\u2550\u2550\u2550 ' + guildName + ' \u2014 TBC Assignment Sheet \u2550\u2550\u2550\n\n';
+    text += 'SITE: ' + url + '\n\n';
+    text += 'Click \ud83d\udd10 LOGIN > Login with Discord > ask GM for an invite code.\n';
+    navigator.clipboard.writeText(text).then(function() {
+      toast('\u2705 Copied to clipboard!');
+    });
+  }
 }
 
 
@@ -4332,7 +4348,7 @@ function importWCLReportSilent(reportCode, callback) {
         var secs = duration % 60;
         var timeStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
         var hp = fight.kill ? 0 : (fight.bossPercentage !== undefined ? Math.round(fight.bossPercentage) : 100);
-        a.attempts.push({time:timeStr, hp:hp, result:fight.kill?'Kill':'Wipe', notes:'WCL ' + dateStr});
+        a.attempts.push({time:timeStr, hp:hp, result:fight.kill?'Kill':'Wipe', notes:'WCL ' + dateStr, reportCode:reportCode, fightId:fight.id});
         
         // Attendance
         if (fight.friendlyPlayers && fight.friendlyPlayers.length) {
@@ -4527,7 +4543,9 @@ function importWCLReport(reportCode) {
           time: timeStr,
           hp: hp,
           result: fight.kill ? 'Kill' : 'Wipe',
-          notes: 'WCL import — ' + dateStr
+          notes: 'WCL import — ' + dateStr,
+          reportCode: reportCode,
+          fightId: fight.id
         });
 
         // Attendance from fight participants - store at raid level
@@ -5369,6 +5387,9 @@ function renderAttemptsView(container) {
           h += '<div style="font-weight:900;color:' + borderColor + '">#' + (i+1) + '</div>';
           h += '<div style="font-weight:900;color:' + hpColor + ';font-size:13px">' + hpText + '</div>';
           h += '<div style="color:var(--text-sub)">' + (att.time||'?') + '</div>';
+          if (!isKill && att.reportCode && att.fightId) {
+            h += '<div style="margin-top:2px"><button style="font-size:9px;font-family:Share Tech Mono,monospace;background:none;border:1px solid #aa3344;color:#aa3344;padding:1px 6px;cursor:pointer" onclick="event.stopPropagation();openWipeAutopsy(\''+att.reportCode+'\','+att.fightId+',\''+bossName.replace(/'/g,"\\'")+'\')">\u2620 AUTOPSY</button></div>';
+          }
           h += '</div>';
         });
         h += '</div>';
@@ -5714,10 +5735,27 @@ function renderPerfOverview(pd) {
     h+='<div class="data-card"><div class="data-card-header">CONSISTENCY \u2014 lowest variance first (3+ fights)</div>'+svgBarH(conItems,{w:680,padL:160,padR:55,barH:24})+'</div>';
   }
   h+='</div>';
+  // FULL PLAYER TABLE (clickable names)
+  h+='<div class="data-card" style="grid-column:1/-1"><div class="data-card-header">ALL PLAYERS \u2014 click a name to view profile</div>';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:12px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#666;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:4px">PLAYER</th><th style="text-align:left;padding:4px">CLASS</th><th style="text-align:right;padding:4px">AVG DPS</th><th style="text-align:right;padding:4px">BEST</th><th style="text-align:right;padding:4px">PARSE</th><th style="text-align:right;padding:4px">FIGHTS</th><th style="text-align:right;padding:4px">DEATHS</th><th style="text-align:right;padding:4px">CONSISTENCY</th></tr></thead><tbody>';
+  pArr.forEach(function(n){
+    var p=pd.players[n]; var avg=Math.round(p.totalDPS/p.count); var avgP=p.count?Math.round(p.totalParse/p.count):0;
+    var variance=0,avgD=p.totalDPS/p.count; p.entries.forEach(function(e){variance+=Math.pow(e.dps-avgD,2);}); var cv=p.count>1&&avgD>0?Math.round(Math.sqrt(variance/p.count)/avgD*100):0;
+    var cc=clsColorFor(p.cls);
+    h+='<tr style="border-bottom:1px solid #1a1a34;cursor:pointer" onclick="window._perfPlayer=\''+n.replace(/'/g,"\\'")+'\';switchView(\'performance\')" onmouseover="this.style.background=\'rgba(0,240,255,0.05)\'" onmouseout="this.style.background=\'\'">';
+    h+='<td style="padding:4px;color:'+cc+';font-weight:900">'+n+'</td>';
+    h+='<td style="padding:4px;color:'+cc+'">'+p.cls+'</td>';
+    h+='<td style="padding:4px;text-align:right;color:var(--neon-cyan);font-weight:700">'+avg.toLocaleString()+'</td>';
+    h+='<td style="padding:4px;text-align:right;color:var(--neon-orange)">'+p.bestDPS.toLocaleString()+'</td>';
+    h+='<td style="padding:4px;text-align:right;color:'+parseColorForVal(avgP)+'">'+avgP+'%</td>';
+    h+='<td style="padding:4px;text-align:right">'+p.count+'</td>';
+    h+='<td style="padding:4px;text-align:right;color:'+(p.deaths>0?'#aa3344':'var(--neon-green)')+'">'+p.deaths+'</td>';
+    h+='<td style="padding:4px;text-align:right;color:'+(cv<=10?'var(--neon-green)':(cv<=20?'var(--neon-cyan)':'var(--neon-orange)')+'">±'+cv+'%</td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
   return h;
 }
-
-// ─── RANKINGS TAB ───
 function renderPerfRankings(pd) {
   var h='';
   if (!pd.sorted.length) return '<div class="data-card" style="text-align:center;padding:40px;color:var(--text-sub)">No performance data yet</div>';
@@ -6834,6 +6872,13 @@ function autoDetectRankCompare(bossName, playerName, playerDps, cmpContainerId, 
   }
   if (!cls) { toast('Player class not found'); return; }
   
+  // Auto-detect spec from fight data
+  if (!spec && window._lastFightCacheKey && window._fightDetailCache) {
+    var fightData = window._fightDetailCache[window._lastFightCacheKey];
+    if (fightData) spec = detectPlayerSpec(cls, fightData);
+    if (spec) toast('\ud83c\udfaf Detected: ' + spec + ' ' + cls);
+  }
+  
   // Get player's kill time from cached fight data
   var myKillTime = 0;
   if (window._lastFightCacheKey && window._fightDetailCache && window._fightDetailCache[window._lastFightCacheKey]) {
@@ -7335,6 +7380,39 @@ function renderComparisonHTML(data, rankPos) {
 // ═══════════════════════════════════════════
 // PERFORMANCE ANALYZER — "WHAT'S HOLDING ME BACK?"
 // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// SHARED SPEC DETECTION
+// ═══════════════════════════════════════════
+var SPEC_MAP = {
+  'Mage': {'Fire':/Fireball|Scorch|Fire Blast|Combustion|Ignite/i,'Arcane':/Arcane Blast|Arcane Missiles|Arcane Power/i,'Frost':/Frostbolt|Ice Lance|Summon Water Elemental/i},
+  'Warrior': {'Arms':/Mortal Strike|Slam|Sweeping Strikes/i,'Fury':/Bloodthirst|Rampage/i,'Protection':/Shield Slam|Devastate/i},
+  'Rogue': {'Combat':/Sinister Strike|Blade Flurry|Adrenaline Rush/i,'Assassination':/Mutilate|Envenom/i,'Subtlety':/Hemorrhage|Shadowstep/i},
+  'Hunter': {'BeastMastery':/Bestial Wrath|Kill Command/i,'Marksmanship':/Aimed Shot|Silencing Shot/i,'Survival':/Explosive Shot|Wyvern Sting/i},
+  'Warlock': {'Destruction':/Incinerate|Shadowfury|Conflagrate/i,'Affliction':/Unstable Affliction|Siphon Life/i,'Demonology':/Felguard|Soul Link|Demonic Knowledge/i},
+  'Priest': {'Shadow':/Mind Flay|Vampiric Touch|Shadow Word: Pain/i,'Holy':/Circle of Healing|Prayer of Healing|Greater Heal/i,'Discipline':/Pain Suppression|Penance|Power Word: Shield/i},
+  'Shaman': {'Elemental':/Lightning Bolt|Chain Lightning|Elemental Mastery/i,'Enhancement':/Stormstrike|Shamanistic Rage/i,'Restoration':/Chain Heal|Mana Tide|Healing Wave/i},
+  'Paladin': {'Retribution':/Crusader Strike|Seal of Command/i,'Protection':/Avenger.s Shield|Holy Shield/i,'Holy':/Holy Light|Flash of Light|Holy Shock/i},
+  'Druid': {'Balance':/Starfire|Wrath|Insect Swarm/i,'Feral':/Mangle|Shred|Rip|Ferocious Bite|Maul|Lacerate/i,'Restoration':/Lifebloom|Swiftmend|Tree of Life/i}
+};
+
+function detectPlayerSpec(cls, fightData) {
+  if (!cls || !fightData || !SPEC_MAP[cls]) return '';
+  var topAbilities = [];
+  if (fightData.dmgDone && fightData.dmgDone.length) topAbilities = fightData.dmgDone.slice().sort(function(a,b){return(b.total||0)-(a.total||0);}).map(function(a){return a.name||'';});
+  var allAbilities = topAbilities.join('|');
+  if (fightData.casts && fightData.casts.length) fightData.casts.forEach(function(c){if(c.name) allAbilities += '|' + c.name;});
+  if (fightData.healDone && fightData.healDone.length) fightData.healDone.forEach(function(h){if(h.name) allAbilities += '|' + h.name;});
+  
+  var bestSpec='',bestHits=0;
+  Object.keys(SPEC_MAP[cls]).forEach(function(sn){
+    var re=SPEC_MAP[cls][sn];
+    var hits=(allAbilities.match(re)||[]).length;
+    topAbilities.forEach(function(ab,idx){if(re.test(ab))hits+=(10-Math.min(idx,9));});
+    if(hits>bestHits){bestHits=hits;bestSpec=sn;}
+  });
+  return bestSpec;
+}
+
 function analyzePerformance(playerName, bossName) {
   var my = null;
   if (window._lastFightCacheKey && window._fightDetailCache) my = window._fightDetailCache[window._lastFightCacheKey];
@@ -7349,33 +7427,7 @@ function analyzePerformance(playerName, bossName) {
   if (!cls) { toast('Player class not found'); return; }
   
   // ── SPEC AUTO-DETECT ──
-  if (!spec) {
-    var topAbilities = [];
-    if (my.dmgDone && my.dmgDone.length) topAbilities = my.dmgDone.slice().sort(function(a,b){return(b.total||0)-(a.total||0);}).map(function(a){return a.name||'';});
-    var allAbilities = topAbilities.join('|');
-    if (my.casts && my.casts.length) my.casts.forEach(function(c){if(c.name) allAbilities += '|' + c.name;});
-    // Also check healing for healer detection
-    var healAbilities = '';
-    if (my.healDone && my.healDone.length) my.healDone.forEach(function(h){if(h.name) healAbilities += '|' + h.name;});
-    allAbilities += healAbilities;
-    
-    var SPEC_MAP = {
-      'Mage': {'Fire':/Fireball|Scorch|Fire Blast|Combustion|Ignite/i,'Arcane':/Arcane Blast|Arcane Missiles|Arcane Power/i,'Frost':/Frostbolt|Ice Lance|Summon Water Elemental/i},
-      'Warrior': {'Arms':/Mortal Strike|Slam|Sweeping Strikes/i,'Fury':/Bloodthirst|Rampage/i,'Protection':/Shield Slam|Devastate/i},
-      'Rogue': {'Combat':/Sinister Strike|Blade Flurry|Adrenaline Rush/i,'Assassination':/Mutilate|Envenom/i,'Subtlety':/Hemorrhage|Shadowstep/i},
-      'Hunter': {'BeastMastery':/Bestial Wrath|Kill Command/i,'Marksmanship':/Aimed Shot|Silencing Shot/i,'Survival':/Explosive Shot|Wyvern Sting/i},
-      'Warlock': {'Destruction':/Incinerate|Shadowfury|Conflagrate/i,'Affliction':/Unstable Affliction|Siphon Life/i,'Demonology':/Felguard|Soul Link|Demonic Knowledge/i},
-      'Priest': {'Shadow':/Mind Flay|Vampiric Touch|Shadow Word: Pain/i,'Holy':/Circle of Healing|Prayer of Healing|Greater Heal/i,'Discipline':/Pain Suppression|Penance|Power Word: Shield/i},
-      'Shaman': {'Elemental':/Lightning Bolt|Chain Lightning|Elemental Mastery/i,'Enhancement':/Stormstrike|Shamanistic Rage/i,'Restoration':/Chain Heal|Mana Tide|Healing Wave/i},
-      'Paladin': {'Retribution':/Crusader Strike|Seal of Command/i,'Protection':/Avenger.s Shield|Holy Shield/i,'Holy':/Holy Light|Flash of Light|Holy Shock/i},
-      'Druid': {'Balance':/Starfire|Wrath|Insect Swarm/i,'Feral':/Mangle|Shred|Rip|Ferocious Bite|Maul|Lacerate/i,'Restoration':/Lifebloom|Swiftmend|Tree of Life/i}
-    };
-    if (SPEC_MAP[cls]) {
-      var bestSpec='',bestHits=0;
-      Object.keys(SPEC_MAP[cls]).forEach(function(sn){var re=SPEC_MAP[cls][sn];var hits=(allAbilities.match(re)||[]).length;topAbilities.forEach(function(ab,idx){if(re.test(ab))hits+=(10-Math.min(idx,9));});if(hits>bestHits){bestHits=hits;bestSpec=sn;}});
-      if(bestSpec) spec=bestSpec;
-    }
-  }
+  if (!spec) spec = detectPlayerSpec(cls, my);
 
   // ── ROLE DETECTION ──
   var HEALER_SPECS = {'Holy':1,'Discipline':1,'Restoration':1};
@@ -8314,6 +8366,172 @@ function expandToasts() {
   });
   container.innerHTML = h;
 }
+
+
+// ═══════════════════════════════════════════
+// ATTENDANCE: ADD UNLOGGED RAID NIGHT
+// ═══════════════════════════════════════════
+function addUnloggedRaidNight() {
+  var h = '<div id="unloggedOverlay" style="position:fixed;inset:0;background:rgba(5,5,20,0.95);z-index:300;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 0" onclick="if(event.target===this)this.remove()">';
+  h += '<div style="background:#111118;border:2px solid var(--neon-green);width:600px;max-width:95vw;margin:20px auto">';
+  h += '<div style="padding:12px 20px;border-bottom:2px solid #2a2a44;display:flex;justify-content:space-between;align-items:center">';
+  h += '<span style="font-family:Orbitron,sans-serif;font-size:14px;color:var(--neon-green);letter-spacing:2px">+ ADD UNLOGGED RAID NIGHT</span>';
+  h += '<button onclick="document.getElementById(\'unloggedOverlay\').remove()" style="background:none;border:none;color:#ff2244;font-size:22px;cursor:pointer">\u00d7</button></div>';
+  h += '<div style="padding:16px 20px">';
+  h += '<div style="font-size:12px;color:var(--text-sub);margin-bottom:10px">Add attendance for a raid that wasn\u2019t combat logged. Check players who were present.</div>';
+  h += '<div style="display:flex;gap:10px;margin-bottom:12px">';
+  h += '<div style="flex:1"><label style="font-size:9px;color:#666;letter-spacing:1px">DATE</label><input id="ulDate" type="date" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:6px 8px;outline:none" value="'+new Date().toISOString().split('T')[0]+'"></div>';
+  h += '<div style="flex:1"><label style="font-size:9px;color:#666;letter-spacing:1px">RAID</label><select id="ulRaid" style="width:100%;font-size:13px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid #2a2a44;color:var(--text-bright);padding:6px 8px">';
+  RAIDS.forEach(function(r){h+='<option value="'+r.id+'">'+r.name+'</option>';});
+  h += '</select></div></div>';
+  h += '<div style="display:flex;gap:8px;margin-bottom:8px">';
+  h += '<button class="btn" style="font-size:10px;padding:3px 10px;border-color:var(--neon-green);color:var(--neon-green)" onclick="document.querySelectorAll(\'.ul-check\').forEach(function(c){c.checked=true})">SELECT ALL</button>';
+  h += '<button class="btn" style="font-size:10px;padding:3px 10px" onclick="document.querySelectorAll(\'.ul-check\').forEach(function(c){c.checked=false})">NONE</button></div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:4px;max-height:350px;overflow-y:auto">';
+  GUILD_ROSTER.forEach(function(r){
+    var cc=CLASS_COLORS_MAP[r.cls]||'#ccc';
+    h+='<label style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:#14141e;border:1px solid #2a2a44;cursor:pointer;font-size:13px"><input type="checkbox" class="ul-check" data-name="'+r.name+'" style="accent-color:var(--neon-green)"><span style="color:'+cc+';font-weight:700">'+r.name+'</span></label>';
+  });
+  h += '</div>';
+  h += '<button class="btn primary" style="font-size:13px;padding:8px 24px;margin-top:12px" onclick="saveUnloggedNight()">SAVE ATTENDANCE</button>';
+  h += '</div></div></div>';
+  document.body.insertAdjacentHTML('beforeend',h);
+}
+
+function saveUnloggedNight() {
+  var date=document.getElementById('ulDate').value;
+  var raidId=document.getElementById('ulRaid').value;
+  if(!date){toast('Pick a date');return;}
+  var present=[];
+  document.querySelectorAll('.ul-check').forEach(function(c){if(c.checked)present.push(c.getAttribute('data-name'));});
+  if(!present.length){toast('Select at least one player');return;}
+  // Find the raid
+  var raid=RAIDS.find(function(r){return r.id===raidId;});
+  if(!raid)return;
+  // Add attendance for first boss of that raid (represents the whole night)
+  var attKey=raidId+'_attendance';
+  if(!assignments[attKey])assignments[attKey]={attendance:{}};
+  if(!assignments[attKey].attendance)assignments[attKey].attendance={};
+  if(!assignments[attKey].attendance[date])assignments[attKey].attendance[date]={};
+  // Mark present players
+  present.forEach(function(name){assignments[attKey].attendance[date][name]='present';});
+  // Mark absent players (roster members not checked)
+  GUILD_ROSTER.forEach(function(r){
+    if(present.indexOf(r.name)===-1&&!assignments[attKey].attendance[date][r.name]){
+      assignments[attKey].attendance[date][r.name]='absent';
+    }
+  });
+  quickSave();
+  toast('\u2705 Added '+present.length+' present for '+raid.name+' on '+date);
+  document.getElementById('unloggedOverlay').remove();
+  switchView('attendance');
+}
+
+// ═══════════════════════════════════════════
+// WIPE AUTOPSY — query WCL for death details on a wipe
+// ═══════════════════════════════════════════
+function openWipeAutopsy(reportCode, fightId, bossName) {
+  if(!reportCode||!fightId){toast('No report data for this pull');return;}
+  var token=getWclToken();
+  if(!token){toast('Set up WCL first');return;}
+  // Show loading
+  var h='<div id="autopsyOverlay" style="position:fixed;inset:0;background:rgba(5,5,20,0.95);z-index:300;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">';
+  h+='<div style="background:#111118;border:2px solid var(--neon-red);width:700px;max-width:95vw;padding:30px;text-align:center">';
+  h+='<div style="font-family:Orbitron,sans-serif;font-size:14px;color:var(--neon-red);letter-spacing:2px;margin-bottom:10px">\u2620 WIPE AUTOPSY</div>';
+  h+='<div style="color:var(--text-sub);font-size:12px">Loading death events for '+bossName+'...</div>';
+  h+='</div></div>';
+  document.body.insertAdjacentHTML('beforeend',h);
+
+  var qFn=getWclUserToken()?wclUserQuery:wclQuery;
+  var q='{ reportData { report(code:"'+reportCode+'") { events(dataType:Deaths, fightIDs:['+fightId+'], limit:50) { data } table(dataType:DamageTaken, fightIDs:['+fightId+']) } } }';
+  
+  qFn(q).then(function(data){
+    if(!data||!data.reportData||!data.reportData.report){throw new Error('Report archived or unavailable');}
+    var deaths=(data.reportData.report.events&&data.reportData.report.events.data)||[];
+    var dmgTaken=(data.reportData.report.table&&data.reportData.report.table.data&&data.reportData.report.table.data.entries)||[];
+    
+    // Sort deaths by timestamp
+    deaths.sort(function(a,b){return(a.timestamp||0)-(b.timestamp||0);});
+    
+    // Build autopsy
+    var rh='<div style="background:#111118;border:2px solid var(--neon-red);width:700px;max-width:95vw;margin:20px auto">';
+    rh+='<div style="padding:12px 20px;border-bottom:2px solid #2a2a44;display:flex;justify-content:space-between;align-items:center">';
+    rh+='<span style="font-family:Orbitron,sans-serif;font-size:14px;color:var(--neon-red);letter-spacing:2px">\u2620 WIPE AUTOPSY \u2014 '+bossName+'</span>';
+    rh+='<button onclick="document.getElementById(\'autopsyOverlay\').remove()" style="background:none;border:none;color:#ff2244;font-size:22px;cursor:pointer">\u00d7</button></div>';
+    
+    if(!deaths.length){
+      rh+='<div style="padding:30px;text-align:center;color:var(--text-sub)">No death events found for this pull.</div>';
+    } else {
+      // Summary
+      rh+='<div style="padding:10px 20px;background:#0a0a14;border-bottom:1px solid #2a2a44;font-family:Share Tech Mono,monospace;font-size:12px;color:var(--text-sub)">';
+      rh+=deaths.length+' deaths total. First death at '+formatMs(deaths[0].timestamp||0)+'.';
+      if(deaths.length>1) rh+=' Last death at '+formatMs(deaths[deaths.length-1].timestamp||0)+'.';
+      rh+='</div>';
+      
+      // Death timeline
+      rh+='<div style="padding:12px 20px;max-height:60vh;overflow-y:auto">';
+      rh+='<table style="width:100%;border-collapse:collapse;font-size:12px;font-family:Share Tech Mono,monospace">';
+      rh+='<thead><tr style="color:#666;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:4px;width:50px">#</th><th style="text-align:left;padding:4px;width:70px">TIME</th><th style="text-align:left;padding:4px">PLAYER</th><th style="text-align:left;padding:4px">KILLED BY</th><th style="text-align:left;padding:4px">OVERKILL</th></tr></thead><tbody>';
+      
+      deaths.forEach(function(d,i){
+        var name=d.targetName||d.name||'Unknown';
+        var killer=d.killerName||d.source&&d.source.name||'Unknown';
+        var ability=d.ability&&d.ability.name||d.killingAbilityName||'Unknown';
+        var overkill=d.overkill||0;
+        var isTank=i===0;
+        var rowColor=isTank?'background:rgba(255,34,68,0.08)':'';
+        var pR=GUILD_ROSTER.find(function(r){return r.name===name;});
+        var clsColor=pR?CLASS_COLORS_MAP[pR.cls]||'#ccc':'#ccc';
+        
+        rh+='<tr style="border-bottom:1px solid #1a1a34;'+rowColor+'">';
+        rh+='<td style="padding:4px;color:var(--neon-red);font-weight:900">'+(i+1)+'</td>';
+        rh+='<td style="padding:4px;color:var(--neon-cyan)">'+formatMs(d.timestamp||0)+'</td>';
+        rh+='<td style="padding:4px;color:'+clsColor+';font-weight:900">'+name+(isTank?' <span style="color:var(--neon-red);font-size:10px">\u2190 FIRST DEATH</span>':'')+'</td>';
+        rh+='<td style="padding:4px"><span style="color:var(--neon-orange)">'+ability+'</span> <span style="color:#888">from '+killer+'</span></td>';
+        rh+='<td style="padding:4px;color:'+(overkill>0?'var(--neon-red)':'#555')+'">'+(overkill>0?'-'+fmtK(overkill):'0')+'</td>';
+        rh+='</tr>';
+      });
+      rh+='</tbody></table>';
+      
+      // Death chain analysis
+      if(deaths.length>=3){
+        var first3=deaths.slice(0,3);
+        var timeSpan=(first3[2].timestamp||0)-(first3[0].timestamp||0);
+        if(timeSpan<5000){
+          rh+='<div style="margin-top:12px;padding:10px;border:1px solid var(--neon-red);background:rgba(255,34,68,0.05)">';
+          rh+='<div style="color:var(--neon-red);font-weight:900;font-size:12px;margin-bottom:4px">\u26a0 RAPID DEATH CHAIN</div>';
+          rh+='<div style="color:var(--text-sub);font-size:11px">3 deaths within '+Math.round(timeSpan/1000)+'s. This suggests a cascading failure \u2014 likely a tank death causing a wipe, or raid-wide mechanic failure.</div>';
+          rh+='</div>';
+        }
+      }
+      
+      // Avoidable damage summary
+      var avoidable=['Shatter','Flame Wreath','Blaze','Shadow Word','Whirlwind','Cave In','Chain Lightning','Cleave','Ground Slam','Blast Wave'];
+      var avoidableDeaths=deaths.filter(function(d){
+        var ab=d.ability&&d.ability.name||d.killingAbilityName||'';
+        return avoidable.some(function(a){return ab.indexOf(a)!==-1;});
+      });
+      if(avoidableDeaths.length){
+        rh+='<div style="margin-top:8px;padding:10px;border:1px solid var(--neon-orange);background:rgba(255,102,0,0.05)">';
+        rh+='<div style="color:var(--neon-orange);font-weight:900;font-size:12px;margin-bottom:4px">\u26a0 '+avoidableDeaths.length+' POTENTIALLY AVOIDABLE DEATH'+(avoidableDeaths.length>1?'S':'')+'</div>';
+        rh+='<div style="color:var(--text-sub);font-size:11px">'+avoidableDeaths.map(function(d){return(d.targetName||'?')+' \u2014 '+(d.ability&&d.ability.name||d.killingAbilityName||'?');}).join(', ')+'</div>';
+        rh+='</div>';
+      }
+      
+      rh+='</div>';
+    }
+    rh+='</div>';
+    var ov=document.getElementById('autopsyOverlay');
+    if(ov)ov.innerHTML=rh;
+  }).catch(function(err){
+    var ov=document.getElementById('autopsyOverlay');
+    if(ov)ov.innerHTML='<div style="background:#111118;border:2px solid var(--neon-red);width:500px;max-width:95vw;padding:40px;text-align:center"><div style="color:var(--neon-red)">'+err.message+'</div><button class="btn" style="margin-top:12px" onclick="document.getElementById(\'autopsyOverlay\').remove()">CLOSE</button></div>';
+  });
+}
+
+function formatMs(ms){var s=Math.round(ms/1000);var m=Math.floor(s/60);s=s%60;return m+':'+(s<10?'0':'')+s;}
+
+
 
 // ═══════════════════════════════════════════
 // INIT
