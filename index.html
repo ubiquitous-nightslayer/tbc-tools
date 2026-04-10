@@ -5842,14 +5842,14 @@ function svgLine(points, opts) {
     var dc=o.dotColors&&o.dotColors[c.i]?o.dotColors[c.i]:o.color;
     var isHL=c.p.highlight;
     var isPeak=ci===peakIdx&&coords.length>3;
-    var dr=isHL?6:isPeak?5:3.5;
-    // Outer glow
-    s+='<circle cx="'+c.x+'" cy="'+c.y+'" r="'+(dr+6)+'" fill="'+dc+'" opacity="'+(isHL?0.2:isPeak?0.15:0.08)+'"'+(isPeak?' class="chart-peak-pulse"':'')+'/>';
+    var dr=isHL?4.5:isPeak?3.5:2;
+    // Subtle glow - only on peak/highlight
+    if (isPeak||isHL) s+='<circle cx="'+c.x+'" cy="'+c.y+'" r="'+(dr+3)+'" fill="'+dc+'" opacity="'+(isHL?0.18:0.12)+'"'+(isPeak?' class="chart-peak-pulse"':'')+'/>';
     // Dot
-    s+='<circle cx="'+c.x+'" cy="'+c.y+'" r="'+dr+'" fill="'+dc+'" stroke="#0a0a16" stroke-width="1.5" class="chart-dot" style="animation-delay:'+(ci*0.03)+'s"><title>'+(c.p.label||'')+': '+c.p.y+(c.p.tag?' ['+c.p.tag+']':'')+'</title></circle>';
-    if (c.p.tag) s+='<text x="'+c.x+'" y="'+(c.y-11)+'" fill="'+dc+'" font-size="10" text-anchor="middle" font-family="Share Tech Mono,monospace" font-weight="900">'+c.p.tag+'</text>';
-    if (coords.length<=15) {
-      s+='<text x="'+c.x+'" y="'+(c.y+(isHL?18:14))+'" fill="'+dc+'" font-size="9" text-anchor="middle" font-family="Share Tech Mono,monospace" font-weight="700" opacity="0.55">'+fmtK(c.p.y)+'</text>';
+    s+='<circle cx="'+c.x+'" cy="'+c.y+'" r="'+dr+'" fill="'+dc+'" stroke="#0a0a16" stroke-width="1"><title>'+(c.p.label||'')+': '+c.p.y+(c.p.tag?' ['+c.p.tag+']':'')+'</title></circle>';
+    if (c.p.tag) s+='<text x="'+c.x+'" y="'+(c.y-9)+'" fill="'+dc+'" font-size="10" text-anchor="middle" font-family="Share Tech Mono,monospace" font-weight="900">'+c.p.tag+'</text>';
+    if (coords.length<=10) {
+      s+='<text x="'+c.x+'" y="'+(c.y+(isHL?16:12))+'" fill="'+dc+'" font-size="9" text-anchor="middle" font-family="Share Tech Mono,monospace" font-weight="700" opacity="0.5">'+fmtK(c.p.y)+'</text>';
     }
   });
   // Peak annotation
@@ -6975,14 +6975,16 @@ function renderPlayerProfile(container, playerName) {
   entries.forEach(function(e){if(!bossDPS[e.boss])bossDPS[e.boss]={total:0,count:0,best:0,worst:Infinity,deaths:0,parseSum:0,parseN:0,entries:[]};var b=bossDPS[e.boss];b.total+=e.dps;b.count++;if(e.dps>b.best)b.best=e.dps;if(e.dps<b.worst)b.worst=e.dps;b.deaths+=e.deaths;if(e.parse>0){b.parseSum+=e.parse;b.parseN++;}b.entries.push(e);});
   var bossNames=Object.keys(bossDPS).sort(function(a,b){return Math.round(bossDPS[b].total/bossDPS[b].count)-Math.round(bossDPS[a].total/bossDPS[a].count);});
   
-  if (bossNames.length > 1 && (window._profileTab === 'overview' || window._profileTab === 'trends' || window._profileTab === 'fightlog')) {
-    h+='<div class="date-tabs" style="margin-bottom:10px">';
-    h+='<button class="date-tab'+(!activeBoss?' active':'')+'" onclick="window._perfBoss=null;window._perfFight=null;switchView(\'performance\')">ALL BOSSES</button>';
+  if (bossNames.length > 1) {
+    h+='<div style="margin-bottom:10px;display:flex;align-items:center;gap:8px">';
+    h+='<label style="font-size:10px;color:#666;letter-spacing:1px;font-family:Share Tech Mono,monospace">BOSS FILTER</label>';
+    h+='<select style="font-size:12px;font-family:Share Tech Mono,monospace;background:#14141e;border:1px solid var(--border);color:var(--neon-cyan);padding:5px 10px;min-width:200px" onchange="window._perfBoss=this.value||null;window._perfFight=null;switchView(\'performance\')">';
+    h+='<option value=""'+ (!activeBoss?' selected':'') +'>All Bosses ('+entries.length+' fights)</option>';
     bossNames.forEach(function(bn){
       var b=bossDPS[bn]; var avg=Math.round(b.total/b.count);
-      h+='<button class="date-tab'+(activeBoss===bn?' active':'')+'" onclick="window._perfBoss=\''+bn.replace(/'/g,"\\'")+'\';window._perfFight=null;switchView(\'performance\')">'+bn+' ('+avg.toLocaleString()+')</button>';
+      h+='<option value="'+bn.replace(/"/g,'&quot;')+'"'+(activeBoss===bn?' selected':'')+'>'+bn+' — '+avg.toLocaleString()+' avg ('+b.count+')</option>';
     });
-    h+='</div>';
+    h+='</select></div>';
   }
   
   // Filter entries if boss selected
@@ -9674,16 +9676,36 @@ function renderRosterAudit(pd) {
   h += '<div class="data-card"><div class="data-card-header">\ud83c\udfc6 ROSTER SCORECARD \u2014 weighted performance analysis (click \ud83d\udd0d for deep scan)</div>';
   h += '<div style="font-size:11px;color:var(--text-sub);margin-bottom:10px;font-family:Share Tech Mono,monospace">Weights: Consistency 20% \u2022 Survival 20% \u2022 Parse 15% \u2022 Attendance 15% \u2022 Class Rank 10% \u2022 Improvement 10% \u2022 Pressure 5% \u2022 Consumables 5%</div>';
   h += '<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Share Tech Mono,monospace"><thead><tr style="color:#666;border-bottom:2px solid var(--border)">';
-  h += '<th style="text-align:left;padding:5px">#</th>';
-  h += '<th style="text-align:left;padding:5px">PLAYER</th>';
-  h += '<th style="text-align:right;padding:5px">SCORE</th>';
-  h += '<th style="text-align:right;padding:5px">AVG DPS</th>';
-  h += '<th style="text-align:right;padding:5px">CONSIST</th>';
-  h += '<th style="text-align:right;padding:5px">DEATHS/F</th>';
-  h += '<th style="text-align:right;padding:5px">ATT%</th>';
-  h += '<th style="text-align:right;padding:5px">TREND</th>';
-  h += '<th style="text-align:right;padding:5px">CLASS#</th>';
-  h += '<th style="text-align:right;padding:5px">PRESSURE</th>';
+  if (!window._rosterSort) window._rosterSort = 'composite';
+  if (!window._rosterDir) window._rosterDir = 'desc';
+  window._rosterSortClick = function(key) {
+    var was = window._rosterSort === key;
+    window._rosterSort = key;
+    window._rosterDir = was && window._rosterDir === 'desc' ? 'asc' : 'desc';
+    switchView('performance');
+  };
+  var sortKey = window._rosterSort, sortDir = window._rosterDir;
+  var sortFns = {
+    composite: function(a,b){return b.composite-a.composite;},
+    name: function(a,b){return a.name.localeCompare(b.name);},
+    avgDPS: function(a,b){return b.avgDPS-a.avgDPS;},
+    cv: function(a,b){return a.cv-b.cv;},
+    deathsPerFight: function(a,b){return a.deathsPerFight-b.deathsPerFight;},
+    attendance: function(a,b){return b.attendance-a.attendance;},
+    trend: function(a,b){return b.trend.slope-a.trend.slope;},
+    pressure: function(a,b){return(a.pressure.choker?1:0)-(b.pressure.choker?1:0);}
+  };
+  if (sortFns[sortKey]) cards.sort(function(a,b){var r=sortFns[sortKey](a,b);return sortDir==='asc'?-r:r;});
+  function rthS(key,label,align){var ar=sortKey===key?(sortDir==='desc'?' \u25BC':' \u25B2'):'';return '<th style="text-align:'+align+';padding:5px;cursor:pointer;user-select:none;white-space:nowrap" onclick="window._rosterSortClick(\''+key+'\')">' + label + '<span style="color:var(--neon-cyan);font-size:9px">' + ar + '</span></th>';}
+  h += rthS('composite','#','left');
+  h += rthS('name','PLAYER','left');
+  h += rthS('composite','SCORE','right');
+  h += rthS('avgDPS','AVG DPS','right');
+  h += rthS('cv','CONSIST','right');
+  h += rthS('deathsPerFight','DEATHS/F','right');
+  h += rthS('attendance','ATT%','right');
+  h += rthS('trend','TREND','right');
+  h += rthS('pressure','PRESSURE','right');
   h += '<th style="text-align:center;padding:5px">SCAN</th>';
   h += '</tr></thead><tbody>';
   
@@ -9697,14 +9719,14 @@ function renderRosterAudit(pd) {
     
     h += '<tr style="border-bottom:1px solid #1a1a34;cursor:pointer" onmouseover="this.style.background=\'rgba(0,240,255,0.03)\'" onmouseout="this.style.background=\'\'">';
     h += '<td style="padding:5px;color:' + scoreColor + ';font-weight:900">' + (i + 1) + '</td>';
-    h += '<td style="padding:5px"><span style="color:' + cc + ';font-weight:900;cursor:pointer" onclick="window._perfPlayer=\'' + c.name.replace(/'/g, "\\'") + '\';switchView(\'performance\')">' + c.name + '</span> <span style="color:' + cc + ';font-size:9px">' + c.cls + '</span></td>';
+    h += '<td style="padding:5px"><span style="color:' + cc + ';font-weight:900;cursor:pointer" onclick="window._perfPlayer=\'' + c.name.replace(/'/g, "\\'") + '\';switchView(\'performance\')">' + c.name + '</span></td>';
     h += '<td style="padding:5px;text-align:right"><span style="color:' + scoreColor + ';font-weight:900;font-size:14px">' + c.composite + '</span></td>';
     h += '<td style="padding:5px;text-align:right;color:var(--neon-cyan)">' + c.avgDPS.toLocaleString() + '</td>';
     h += '<td style="padding:5px;text-align:right;color:' + (c.cv <= 10 ? 'var(--neon-green)' : (c.cv <= 20 ? 'var(--neon-cyan)' : 'var(--neon-orange)')) + '">\u00b1' + c.cv + '%</td>';
     h += '<td style="padding:5px;text-align:right;color:' + (c.deathsPerFight <= 0.1 ? 'var(--neon-green)' : (c.deathsPerFight <= 0.3 ? 'var(--neon-cyan)' : '#aa3344')) + '">' + c.deathsPerFight + '</td>';
     h += '<td style="padding:5px;text-align:right;color:' + (c.attendance >= 80 ? 'var(--neon-green)' : (c.attendance >= 50 ? 'var(--neon-orange)' : '#aa3344')) + '">' + c.attendance + '%</td>';
     h += '<td style="padding:5px;text-align:right;color:' + trendColor + '">' + trendIcon + ' ' + (c.trend.slope > 0 ? '+' : '') + c.trend.slope + '</td>';
-    h += '<td style="padding:5px;text-align:right">#' + c.classRank + '/' + c.classTotal + '</td>';
+
     h += '<td style="padding:5px;text-align:right;color:' + pressureColor + ';font-size:10px">' + pressureText + '</td>';
     h += '<td style="padding:5px;text-align:center"><button style="background:none;border:1px solid var(--neon-cyan);color:var(--neon-cyan);font-size:10px;padding:2px 6px;cursor:pointer;font-family:Share Tech Mono,monospace" onclick="event.stopPropagation();runDeepScan(\'' + c.name.replace(/'/g, "\\'") + '\')">\ud83d\udd0d</button></td>';
     h += '</tr>';
@@ -9790,9 +9812,9 @@ function renderH2H(pd) {
   var ccA = clsColorFor(a.cls), ccB = clsColorFor(b.cls);
   
   h += '<table style="width:100%;border-collapse:collapse;font-size:13px;font-family:Share Tech Mono,monospace">';
-  h += '<thead><tr><th style="width:30%;text-align:left;padding:8px;color:var(--neon-cyan);font-size:16px;border-bottom:2px solid var(--neon-cyan)">' + window._h2hA + ' <span style="font-size:11px;color:' + ccA + '">' + a.cls + '</span></th>';
+  h += '<thead><tr><th style="width:30%;text-align:left;padding:8px;color:var(--neon-cyan);font-size:16px;border-bottom:2px solid var(--neon-cyan)">' + window._h2hA + '</th>';
   h += '<th style="width:40%;text-align:center;padding:8px;color:var(--text-sub)">METRIC</th>';
-  h += '<th style="width:30%;text-align:right;padding:8px;color:var(--neon-orange);font-size:16px;border-bottom:2px solid var(--neon-orange)">' + window._h2hB + ' <span style="font-size:11px;color:' + ccB + '">' + b.cls + '</span></th></tr></thead><tbody>';
+  h += '<th style="width:30%;text-align:right;padding:8px;color:var(--neon-orange);font-size:16px;border-bottom:2px solid var(--neon-orange)">' + window._h2hB + '</th></tr></thead><tbody>';
   
   rows.forEach(function(r) {
     h += '<tr style="border-bottom:1px solid #1a1a34">';
@@ -9840,9 +9862,83 @@ function renderH2H(pd) {
       bTrendVal
     ]}
   ];
-  h += '<div style="margin-top:16px;text-align:center">';
+  h += '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">';
+  // Radar
+  h += '<div style="text-align:center;padding:12px;border:1px solid #2a2a44">';
   h += '<div style="font-family:Orbitron,sans-serif;font-size:11px;color:var(--text-sub);letter-spacing:2px;margin-bottom:8px">PERFORMANCE RADAR</div>';
-  h += svgRadar(radarAxes, radarPlayers, {w: 360, h: 360});
+  h += svgRadar(radarAxes, radarPlayers, {w: 340, h: 340});
+  h += '</div>';
+  
+  // Per-boss DPS comparison bars
+  var h2hBosses = {};
+  a.entries.forEach(function(e){if(!h2hBosses[e.boss])h2hBosses[e.boss]={a:[],b:[]};h2hBosses[e.boss].a.push(e.dps);});
+  b.entries.forEach(function(e){if(!h2hBosses[e.boss])h2hBosses[e.boss]={a:[],b:[]};h2hBosses[e.boss].b.push(e.dps);});
+  var h2hBossNames = Object.keys(h2hBosses).filter(function(bn){return h2hBosses[bn].a.length&&h2hBosses[bn].b.length;});
+  if (h2hBossNames.length) {
+    h += '<div style="padding:12px;border:1px solid #2a2a44">';
+    h += '<div style="font-family:Orbitron,sans-serif;font-size:11px;color:var(--text-sub);letter-spacing:2px;margin-bottom:10px">HEAD-TO-HEAD BY BOSS</div>';
+    var maxBossDPS = 1;
+    h2hBossNames.forEach(function(bn){var d=h2hBosses[bn];var aA=Math.round(d.a.reduce(function(s,v){return s+v;},0)/d.a.length);var bA=Math.round(d.b.reduce(function(s,v){return s+v;},0)/d.b.length);if(aA>maxBossDPS)maxBossDPS=aA;if(bA>maxBossDPS)maxBossDPS=bA;});
+    h2hBossNames.forEach(function(bn){
+      var d=h2hBosses[bn];
+      var aA=Math.round(d.a.reduce(function(s,v){return s+v;},0)/d.a.length);
+      var bA=Math.round(d.b.reduce(function(s,v){return s+v;},0)/d.b.length);
+      var aW=Math.round(aA/maxBossDPS*100), bW=Math.round(bA/maxBossDPS*100);
+      h+='<div style="margin-bottom:8px"><div style="font-size:10px;color:var(--text-sub);margin-bottom:2px">'+bn+'</div>';
+      h+='<div style="display:flex;gap:4px;align-items:center"><div style="width:45%;height:14px;background:#1a1a2e;border-radius:2px;overflow:hidden;position:relative"><div style="position:absolute;right:0;top:0;width:'+aW+'%;height:100%;background:var(--neon-cyan);opacity:0.7;border-radius:2px"></div></div>';
+      h+='<div style="width:10%;text-align:center;font-size:9px;color:var(--text-sub)">'+aA.toLocaleString()+' / '+bA.toLocaleString()+'</div>';
+      h+='<div style="width:45%;height:14px;background:#1a1a2e;border-radius:2px;overflow:hidden"><div style="width:'+bW+'%;height:100%;background:var(--neon-orange);opacity:0.7;border-radius:2px"></div></div></div></div>';
+    });
+    h += '</div>';
+  } else {
+    h += '<div style="padding:12px;border:1px solid #2a2a44;text-align:center;color:var(--text-sub)">No shared boss fights to compare</div>';
+  }
+  
+  // DPS over time overlay
+  if (aDated.length >= 2 || bDated.length >= 2) {
+    h += '<div style="padding:12px;border:1px solid #2a2a44">';
+    h += '<div style="font-family:Orbitron,sans-serif;font-size:11px;color:var(--text-sub);letter-spacing:2px;margin-bottom:8px">DPS TIMELINE OVERLAY</div>';
+    var allDated = [];
+    aDated.forEach(function(e,i){allDated.push({x:i,y:e.dps,src:'a'});});
+    bDated.forEach(function(e,i){allDated.push({x:i,y:e.dps,src:'b'});});
+    var allVals = allDated.map(function(d){return d.y;});
+    var tMin = Math.min.apply(null,allVals)*0.85, tMax = Math.max.apply(null,allVals)*1.1;
+    if(tMax<=tMin)tMax=tMin+100;
+    var tw=400,th2=160,tpl=40,tpr=10,tpt=10,tpb=20;
+    var tcw=tw-tpl-tpr, tch=th2-tpt-tpb;
+    h+='<svg viewBox="0 0 '+tw+' '+th2+'" style="width:100%;display:block">';
+    h+='<rect x="'+tpl+'" y="'+tpt+'" width="'+tcw+'" height="'+tch+'" fill="#0a0a16" rx="3"/>';
+    // A line
+    if(aDated.length>=2){var aPath='M';aDated.forEach(function(e,i){var x=tpl+(aDated.length>1?i/(aDated.length-1):0.5)*tcw;var y=tpt+tch-((e.dps-tMin)/(tMax-tMin))*tch;aPath+=(i?'L':'')+(Math.round(x*10)/10)+','+(Math.round(y*10)/10);});h+='<path d="'+aPath+'" fill="none" stroke="var(--neon-cyan)" stroke-width="2" opacity="0.8"/>';}
+    // B line
+    if(bDated.length>=2){var bPath='M';bDated.forEach(function(e,i){var x=tpl+(bDated.length>1?i/(bDated.length-1):0.5)*tcw;var y=tpt+tch-((e.dps-tMin)/(tMax-tMin))*tch;bPath+=(i?'L':'')+(Math.round(x*10)/10)+','+(Math.round(y*10)/10);});h+='<path d="'+bPath+'" fill="none" stroke="var(--neon-orange)" stroke-width="2" opacity="0.8"/>';}
+    h+='<text x="'+(tpl+5)+'" y="'+(tpt+12)+'" fill="var(--neon-cyan)" font-size="9" font-family="Share Tech Mono,monospace">'+window._h2hA+'</text>';
+    h+='<text x="'+(tw-tpr-5)+'" y="'+(tpt+12)+'" fill="var(--neon-orange)" font-size="9" font-family="Share Tech Mono,monospace" text-anchor="end">'+window._h2hB+'</text>';
+    h+='</svg></div>';
+  }
+  
+  // Quick stats comparison grid
+  h += '<div style="padding:12px;border:1px solid #2a2a44">';
+  h += '<div style="font-family:Orbitron,sans-serif;font-size:11px;color:var(--text-sub);letter-spacing:2px;margin-bottom:10px">EFFICIENCY STATS</div>';
+  var aMedian=0,bMedian=0;
+  var aSorted2=a.entries.map(function(e){return e.dps;}).sort(function(x,y){return x-y;});
+  var bSorted2=b.entries.map(function(e){return e.dps;}).sort(function(x,y){return x-y;});
+  if(aSorted2.length)aMedian=aSorted2[Math.floor(aSorted2.length/2)];
+  if(bSorted2.length)bMedian=bSorted2[Math.floor(bSorted2.length/2)];
+  var effRows = [
+    {m:'Median DPS',a:aMedian.toLocaleString(),b:bMedian.toLocaleString()},
+    {m:'Worst DPS',a:Math.min.apply(null,aSorted2.length?aSorted2:[0]).toLocaleString(),b:Math.min.apply(null,bSorted2.length?bSorted2:[0]).toLocaleString()},
+    {m:'Death-Free %',a:Math.round(a.entries.filter(function(e){return !e.deaths;}).length/Math.max(1,a.count)*100)+'%',b:Math.round(b.entries.filter(function(e){return !e.deaths;}).length/Math.max(1,b.count)*100)+'%'},
+    {m:'Avg Parse',a:aParse+'%',b:bParse+'%'}
+  ];
+  effRows.forEach(function(r){
+    h+='<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #1a1a2e;font-size:11px">';
+    h+='<span style="color:var(--neon-cyan)">'+r.a+'</span>';
+    h+='<span style="color:var(--text-sub)">'+r.m+'</span>';
+    h+='<span style="color:var(--neon-orange)">'+r.b+'</span></div>';
+  });
+  h += '</div>';
+  
   h += '</div>';
   
   // Winner banner
@@ -10001,6 +10097,68 @@ function renderDeepScanInline(results) {
     rh += '</div>';
     rh += '<div style="display:flex;justify-content:space-between;font-size:9px;color:#555;margin-top:2px"><span>Oldest</span><span>Recent</span></div>';
     rh += '</div>';
+  }
+  
+  // ─── SCAN SUMMARY GRADE ───
+  var gradeScore = 0, gradeMax = 0;
+  // Consumable compliance
+  if (results.consumables && results.consumables.length) {
+    var fR = Math.round(results.consumables.filter(function(c){return c.hasFlask;}).length/results.consumables.length*100);
+    gradeScore += fR >= 80 ? 20 : (fR >= 50 ? 10 : 0); gradeMax += 20;
+  }
+  // Avoidable damage
+  if (results.avoidable) { gradeScore += results.avoidable.length === 0 ? 20 : (results.avoidable.length <= 2 ? 10 : 0); gradeMax += 20; }
+  // Boss focus
+  if (results.bossDmg && results.bossDmg.length) {
+    var avgPad2 = 0; results.bossDmg.forEach(function(d){avgPad2+=d.paddingPct;}); avgPad2=Math.round(avgPad2/results.bossDmg.length);
+    gradeScore += avgPad2 <= 5 ? 20 : (avgPad2 <= 15 ? 12 : (avgPad2 <= 25 ? 5 : 0)); gradeMax += 20;
+  }
+  // Cooldown usage
+  if (results.cooldowns && results.cooldowns.length) {
+    var cdTotal2 = 0, cdUsed2 = 0;
+    results.cooldowns.forEach(function(c){cdTotal2++;cdUsed2+=c.uses;});
+    var cdRate = cdTotal2 ? Math.round(cdUsed2/results.totalFights*10)/10 : 0;
+    gradeScore += cdRate >= 2 ? 20 : (cdRate >= 1 ? 12 : 5); gradeMax += 20;
+  }
+  // Activity consistency
+  if (results.cpm.length > 2) {
+    var cpmVals = results.cpm.map(function(c){return c.totalCasts;});
+    var cpmAvg2 = cpmVals.reduce(function(s,v){return s+v;},0)/cpmVals.length;
+    var cpmVar = 0; cpmVals.forEach(function(v){cpmVar+=Math.pow(v-cpmAvg2,2);});
+    var cpmCV = cpmAvg2>0 ? Math.round(Math.sqrt(cpmVar/cpmVals.length)/cpmAvg2*100) : 0;
+    gradeScore += cpmCV <= 10 ? 20 : (cpmCV <= 20 ? 12 : 5); gradeMax += 20;
+  }
+  if (gradeMax > 0) {
+    var gradePct = Math.round(gradeScore / gradeMax * 100);
+    var gradeLetter = gradePct >= 90 ? 'A' : (gradePct >= 75 ? 'B' : (gradePct >= 60 ? 'C' : (gradePct >= 40 ? 'D' : 'F')));
+    var gradeColor = gradePct >= 90 ? '#ffd700' : (gradePct >= 75 ? 'var(--neon-green)' : (gradePct >= 60 ? 'var(--neon-cyan)' : (gradePct >= 40 ? 'var(--neon-orange)' : '#aa3344')));
+    rh += '<div style="margin-bottom:12px;padding:12px;border:2px solid '+gradeColor+';text-align:center">';
+    rh += '<div style="font-family:Orbitron,sans-serif;font-size:10px;color:var(--text-sub);letter-spacing:2px;margin-bottom:4px">SCAN GRADE</div>';
+    rh += '<div style="font-family:Orbitron,sans-serif;font-size:32px;color:'+gradeColor+';font-weight:900">'+gradeLetter+'</div>';
+    rh += '<div style="font-size:11px;color:var(--text-sub)">'+gradePct+'% — Consumables \u2022 Mechanics \u2022 Focus \u2022 Cooldowns \u2022 Consistency</div>';
+    rh += '</div>';
+  }
+  
+  // ─── FIGHT LOG MINI TABLE ───
+  if (results.cpm.length) {
+    rh += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+    rh += '<div style="font-weight:900;color:var(--neon-cyan);margin-bottom:6px">\ud83d\udccb FIGHT BREAKDOWN</div>';
+    rh += '<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="color:#555;border-bottom:1px solid #2a2a44">';
+    rh += '<th style="text-align:left;padding:3px">BOSS</th><th style="text-align:left;padding:3px">DATE</th><th style="text-align:right;padding:3px">CASTS</th>';
+    if (results.bossDmg && results.bossDmg.length) rh += '<th style="text-align:right;padding:3px">FOCUS</th>';
+    rh += '</tr></thead><tbody>';
+    results.cpm.forEach(function(c,ci) {
+      var bd = results.bossDmg && results.bossDmg[ci] ? results.bossDmg[ci] : null;
+      var focusPct = bd ? (100 - bd.paddingPct) + '%' : '-';
+      var focusCol = bd ? (bd.paddingPct <= 5 ? 'var(--neon-green)' : (bd.paddingPct <= 15 ? 'var(--neon-cyan)' : 'var(--neon-orange)')) : 'var(--text-sub)';
+      rh += '<tr style="border-bottom:1px solid #12122a">';
+      rh += '<td style="padding:3px;color:var(--text-bright)">' + c.boss + '</td>';
+      rh += '<td style="padding:3px;color:var(--text-sub)">' + (c.date || '-') + '</td>';
+      rh += '<td style="padding:3px;text-align:right;color:var(--neon-cyan)">' + c.totalCasts + '</td>';
+      if (results.bossDmg && results.bossDmg.length) rh += '<td style="padding:3px;text-align:right;color:'+focusCol+'">' + focusPct + '</td>';
+      rh += '</tr>';
+    });
+    rh += '</tbody></table></div>';
   }
   
   // Re-scan button
