@@ -5295,13 +5295,21 @@ function renderRaidFilter(selectedRaid) {
   h += '<span style="font-family:Orbitron,sans-serif;font-size:12px;color:var(--text-sub);letter-spacing:2px">FILTER:</span>';
   h += '<button class="btn" style="font-size:11px;padding:4px 12px;' + (!selectedRaid ? 'border-color:var(--neon-cyan);color:var(--neon-cyan)' : '') + '" onclick="window._viewRaidFilter=\'\';switchView(currentView)">ALL RAIDS</button>';
   RAIDS.forEach(function(raid, ri) {
+    // Hide 10-man raids when checkbox is unchecked (unless explicitly selected)
+    if (raid.size === 10 && !window._show10Man && selectedRaid !== raid.id) return;
     var active = selectedRaid === raid.id;
-    h += '<button class="btn" style="font-size:11px;padding:4px 12px;' + (active ? 'border-color:var(--neon-cyan);color:var(--neon-cyan)' : '') + '" onclick="window._viewRaidFilter=\'' + raid.id + '\';switchView(currentView)">' + raid.name.toUpperCase() + '</button>';
+    var sizeTag = raid.size === 10 ? ' <span style="font-size:9px;opacity:0.6">(10)</span>' : '';
+    h += '<button class="btn" style="font-size:11px;padding:4px 12px;' + (active ? 'border-color:var(--neon-cyan);color:var(--neon-cyan)' : '') + (raid.size === 10 ? ';opacity:0.7' : '') + '" onclick="window._viewRaidFilter=\'' + raid.id + '\';switchView(currentView)">' + raid.name.toUpperCase() + sizeTag + '</button>';
   });
+  // 10-man toggle checkbox
+  h += '<label style="margin-left:auto;display:flex;align-items:center;gap:5px;cursor:pointer;font-family:Share Tech Mono,monospace;font-size:11px;color:' + (window._show10Man ? 'var(--neon-cyan)' : '#555') + ';user-select:none" title="Include Karazhan and Zul\'Aman (10-man raids) in rankings and stats">';
+  h += '<input type="checkbox" ' + (window._show10Man ? 'checked' : '') + ' onchange="window._show10Man=this.checked;switchView(currentView)" style="accent-color:var(--neon-cyan);cursor:pointer">';
+  h += 'Include 10-Man</label>';
   h += '</div>';
   return h;
 }
 if (!window._viewRaidFilter) window._viewRaidFilter = '';
+if (window._show10Man === undefined) window._show10Man = false;
 if (!window._perfPlayer) window._perfPlayer = null;
 if (!window._attDateFilter) window._attDateFilter = '';
 if (!window._perfSub) window._perfSub = 'dashboard';
@@ -5344,6 +5352,8 @@ function renderAttendanceView(container) {
   
   RAIDS.forEach(function(raid) {
     if (filterRaid && raid.id !== filterRaid) return;
+    // Skip 10-man raids unless toggled on or explicitly filtered
+    if (!window._show10Man && !filterRaid && raid.size === 10) return;
     var attKey = raid.id + '_attendance';
     var a = assignments[attKey] || {};
     if (a.attendance) {
@@ -5454,6 +5464,8 @@ function renderAttemptsView(container) {
   
   RAIDS.forEach(function(raid) {
     if (filterRaid && raid.id !== filterRaid) return;
+    // Skip 10-man raids unless toggled on or explicitly filtered
+    if (!window._show10Man && !filterRaid && raid.size === 10) return;
     raid.bosses.forEach(function(boss) {
       var key = raid.id + '_' + boss.id;
       var a = assignments[key] || {};
@@ -5644,6 +5656,8 @@ function collectPerfData(filterRaid) {
   var players = {}, byBoss = {}, byDate = {}, byClass = {}, allEntries = [];
   RAIDS.forEach(function(raid) {
     if (filterRaid && raid.id !== filterRaid) return;
+    // Skip 10-man raids unless toggled on or explicitly filtered
+    if (!window._show10Man && !filterRaid && raid.size === 10) return;
     raid.bosses.forEach(function(boss) {
       var key = raid.id + '_' + boss.id;
       var a = assignments[key] || {};
