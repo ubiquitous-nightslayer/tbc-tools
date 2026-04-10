@@ -9165,105 +9165,539 @@ function saveUnloggedNight() {
 }
 
 // ═══════════════════════════════════════════
-// WIPE AUTOPSY — query WCL for death details on a wipe
 // ═══════════════════════════════════════════
-function openWipeAutopsy(reportCode, fightId, bossName) {
-  if(!reportCode||!fightId){toast('No report data for this pull');return;}
-  var token=getWclToken();
-  if(!token){toast('Set up WCL first');return;}
-  // Show loading
-  var h='<div id="autopsyOverlay" style="position:fixed;inset:0;background:rgba(5,5,20,0.95);z-index:300;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">';
-  h+='<div style="background:#111118;border:2px solid var(--neon-red);width:700px;max-width:95vw;padding:30px;text-align:center">';
-  h+='<div style="font-family:Orbitron,sans-serif;font-size:14px;color:var(--neon-red);letter-spacing:2px;margin-bottom:10px">\u2620 WIPE AUTOPSY</div>';
-  h+='<div style="color:var(--text-sub);font-size:12px">Loading death events for '+bossName+'...</div>';
-  h+='</div></div>';
-  document.body.insertAdjacentHTML('beforeend',h);
+// WIPEFEST-STYLE FIGHT ANALYSIS
+// ═══════════════════════════════════════════
 
-  var qFn=getWclUserToken()?wclUserQuery:wclQuery;
-  var q='{ reportData { report(code:"'+reportCode+'") { events(dataType:Deaths, fightIDs:['+fightId+'], limit:50) { data } table(dataType:DamageTaken, fightIDs:['+fightId+']) } } }';
-  
-  qFn(q).then(function(data){
-    if(!data||!data.reportData||!data.reportData.report){throw new Error('Report archived or unavailable');}
-    var deaths=(data.reportData.report.events&&data.reportData.report.events.data)||[];
-    var dmgTaken=(data.reportData.report.table&&data.reportData.report.table.data&&data.reportData.report.table.data.entries)||[];
-    
-    // Sort deaths by timestamp
-    deaths.sort(function(a,b){return(a.timestamp||0)-(b.timestamp||0);});
-    
-    // Build autopsy
-    var rh='<div style="background:#111118;border:2px solid var(--neon-red);width:700px;max-width:95vw;margin:20px auto">';
-    rh+='<div style="padding:12px 20px;border-bottom:2px solid #2a2a44;display:flex;justify-content:space-between;align-items:center">';
-    rh+='<span style="font-family:Orbitron,sans-serif;font-size:14px;color:var(--neon-red);letter-spacing:2px">\u2620 WIPE AUTOPSY \u2014 '+bossName+'</span>';
-    rh+='<button onclick="document.getElementById(\'autopsyOverlay\').remove()" style="background:none;border:none;color:#ff2244;font-size:22px;cursor:pointer">\u00d7</button></div>';
-    
-    if(!deaths.length){
-      rh+='<div style="padding:30px;text-align:center;color:var(--text-sub)">No death events found for this pull.</div>';
-    } else {
-      // Summary
-      rh+='<div style="padding:10px 20px;background:#0a0a14;border-bottom:1px solid #2a2a44;font-family:Share Tech Mono,monospace;font-size:12px;color:var(--text-sub)">';
-      rh+=deaths.length+' deaths total. First death at '+formatMs(deaths[0].timestamp||0)+'.';
-      if(deaths.length>1) rh+=' Last death at '+formatMs(deaths[deaths.length-1].timestamp||0)+'.';
-      rh+='</div>';
-      
-      // Death timeline
-      rh+='<div style="padding:12px 20px;max-height:60vh;overflow-y:auto">';
-      rh+='<table style="width:100%;border-collapse:collapse;font-size:12px;font-family:Share Tech Mono,monospace">';
-      rh+='<thead><tr style="color:#666;border-bottom:1px solid var(--border)"><th style="text-align:left;padding:4px;width:50px">#</th><th style="text-align:left;padding:4px;width:70px">TIME</th><th style="text-align:left;padding:4px">PLAYER</th><th style="text-align:left;padding:4px">KILLED BY</th><th style="text-align:left;padding:4px">OVERKILL</th></tr></thead><tbody>';
-      
-      deaths.forEach(function(d,i){
-        var name=d.targetName||d.name||'Unknown';
-        var killer=d.killerName||d.source&&d.source.name||'Unknown';
-        var ability=d.ability&&d.ability.name||d.killingAbilityName||'Unknown';
-        var overkill=d.overkill||0;
-        var isTank=i===0;
-        var rowColor=isTank?'background:rgba(255,34,68,0.08)':'';
-        var pR=GUILD_ROSTER.find(function(r){return r.name===name;});
-        var clsColor=pR?CLASS_COLORS_MAP[pR.cls]||'#ccc':'#ccc';
-        
-        rh+='<tr style="border-bottom:1px solid #1a1a34;'+rowColor+'">';
-        rh+='<td style="padding:4px;color:var(--neon-red);font-weight:900">'+(i+1)+'</td>';
-        rh+='<td style="padding:4px;color:var(--neon-cyan)">'+formatMs(d.timestamp||0)+'</td>';
-        rh+='<td style="padding:4px;color:'+clsColor+';font-weight:900">'+name+(isTank?' <span style="color:var(--neon-red);font-size:10px">\u2190 FIRST DEATH</span>':'')+'</td>';
-        rh+='<td style="padding:4px"><span style="color:var(--neon-orange)">'+ability+'</span> <span style="color:#888">from '+killer+'</span></td>';
-        rh+='<td style="padding:4px;color:'+(overkill>0?'var(--neon-red)':'#555')+'">'+(overkill>0?'-'+fmtK(overkill):'0')+'</td>';
-        rh+='</tr>';
-      });
-      rh+='</tbody></table>';
-      
-      // Death chain analysis
-      if(deaths.length>=3){
-        var first3=deaths.slice(0,3);
-        var timeSpan=(first3[2].timestamp||0)-(first3[0].timestamp||0);
-        if(timeSpan<5000){
-          rh+='<div style="margin-top:12px;padding:10px;border:1px solid var(--neon-red);background:rgba(255,34,68,0.05)">';
-          rh+='<div style="color:var(--neon-red);font-weight:900;font-size:12px;margin-bottom:4px">\u26a0 RAPID DEATH CHAIN</div>';
-          rh+='<div style="color:var(--text-sub);font-size:11px">3 deaths within '+Math.round(timeSpan/1000)+'s. This suggests a cascading failure \u2014 likely a tank death causing a wipe, or raid-wide mechanic failure.</div>';
-          rh+='</div>';
-        }
-      }
-      
-      // Avoidable damage summary
-      var avoidable=['Shatter','Flame Wreath','Blaze','Shadow Word','Whirlwind','Cave In','Chain Lightning','Cleave','Ground Slam','Blast Wave'];
-      var avoidableDeaths=deaths.filter(function(d){
-        var ab=d.ability&&d.ability.name||d.killingAbilityName||'';
-        return avoidable.some(function(a){return ab.indexOf(a)!==-1;});
-      });
-      if(avoidableDeaths.length){
-        rh+='<div style="margin-top:8px;padding:10px;border:1px solid var(--neon-orange);background:rgba(255,102,0,0.05)">';
-        rh+='<div style="color:var(--neon-orange);font-weight:900;font-size:12px;margin-bottom:4px">\u26a0 '+avoidableDeaths.length+' POTENTIALLY AVOIDABLE DEATH'+(avoidableDeaths.length>1?'S':'')+'</div>';
-        rh+='<div style="color:var(--text-sub);font-size:11px">'+avoidableDeaths.map(function(d){return(d.targetName||'?')+' \u2014 '+(d.ability&&d.ability.name||d.killingAbilityName||'?');}).join(', ')+'</div>';
-        rh+='</div>';
-      }
-      
-      rh+='</div>';
-    }
-    rh+='</div>';
-    var ov=document.getElementById('autopsyOverlay');
-    if(ov)ov.innerHTML=rh;
-  }).catch(function(err){
-    var ov=document.getElementById('autopsyOverlay');
-    if(ov)ov.innerHTML='<div style="background:#111118;border:2px solid var(--neon-red);width:500px;max-width:95vw;padding:40px;text-align:center"><div style="color:var(--neon-red)">'+err.message+'</div><button class="btn" style="margin-top:12px" onclick="document.getElementById(\'autopsyOverlay\').remove()">CLOSE</button></div>';
+// ─── BOSS MECHANICS DEFINITIONS ───
+var BOSS_MECHANICS = {
+  'Gruul the Dragonkiller': {
+    avoidable: [{name:'Cave In',id:36240,severity:'high'},{name:'Shatter',id:33654,severity:'critical'}],
+    positioning: [{name:'Ground Slam',id:33525,desc:'Knock back — spread to avoid chain'},{name:'Shatter',id:33654,desc:'Spread 15yd apart before Shatter'}],
+    tankMechanics: [{name:'Hurtful Strike',id:33813,desc:'Hits 2nd highest threat in melee — OT must be #2'}],
+    phases: [{name:'Growth',desc:'Gruul grows every 30s, increasing damage dealt'}]
+  },
+  'High King Maulgar': {
+    avoidable: [{name:'Whirlwind',id:33238,severity:'high'}],
+    interrupts: [{name:'Greater Fireball',id:33051,target:'Krosh Firehand',severity:'critical'},{name:'Blast Wave',id:33061,target:'Krosh Firehand',severity:'high'}],
+    positioning: [{name:'Whirlwind',id:33238,desc:'Melee must run out during Whirlwind'}],
+    tankMechanics: [{name:'Arcing Smash',id:33230,desc:'Frontal cleave on Maulgar'}]
+  },
+  'Magtheridon': {
+    avoidable: [{name:'Blast Nova',id:30616,severity:'critical'},{name:'Debris',id:30631,severity:'medium'}],
+    soaks: [{name:'Manticron Cube',desc:'5 players must click cubes to interrupt Blast Nova'}],
+    interrupts: [{name:'Shadow Bolt Volley',id:30510,target:'Channeler',severity:'high'}],
+    phases: [{name:'Phase 1',desc:'Kill 5 Channelers'},{name:'Phase 2',desc:'Magtheridon released at 2min — click cubes for Blast Nova'}]
+  },
+  'Attumen the Huntsman': {avoidable:[{name:'Intangible Presence',id:29833,severity:'medium'}],positioning:[{name:'Charge',id:29847,desc:'Keep spread'}]},
+  'Moroes': {avoidable:[{name:'Garrote',id:37066,severity:'high'}],interrupts:[{name:'Holy Light',id:29562,target:'Add',severity:'high'}]},
+  'Maiden of Virtue': {avoidable:[{name:'Holy Wrath',id:32445,severity:'medium'}],positioning:[{name:'Repentance',id:29511,desc:'Incapacitate — healers must be spread'}]},
+  'The Curator': {avoidable:[{name:'Hateful Bolt',id:28306,severity:'high'}],phases:[{name:'Evocation',desc:'30% mana — burn phase, 200% damage taken'}]},
+  'Shade of Aran': {avoidable:[{name:'Flame Wreath',id:29946,severity:'critical'},{name:'Blizzard',id:29969,severity:'high'}],positioning:[{name:'Flame Wreath',id:29946,desc:'DO NOT MOVE during Flame Wreath'}]},
+  'Netherspite': {positioning:[{name:'Nether Beam',desc:'Rotate beam soakers every 5 stacks'}],phases:[{name:'Portal Phase',desc:'Stand in beams'},{name:'Banish Phase',desc:'Avoid void zones'}]},
+  'Prince Malchezaar': {avoidable:[{name:'Enfeeble',id:30843,severity:'critical'},{name:'Shadow Nova',id:30852,severity:'high'}],phases:[{name:'Phase 2',desc:'Axes drop — avoid infernals'},{name:'Phase 3',desc:'Axes + nova, healers stay spread'}]},
+  'Nightbane': {avoidable:[{name:'Charred Earth',id:30129,severity:'high'},{name:'Rain of Bones',id:37098,severity:'medium'}],phases:[{name:'Ground',desc:'Tank and spank'},{name:'Air',desc:'Skeletons + rain'}]}
+};
+
+// ─── COMPREHENSIVE FIGHT ANALYZER ───
+function analyzeFight(reportCode, fightId, bossName, callback) {
+  var qFn = getWclUserToken() ? wclUserQuery : wclQuery;
+  var q1 = '{ reportData { report(code: "'+reportCode+'") { masterData { actors { id name type subType } } fights(fightIDs: ['+fightId+']) { id name startTime endTime kill } } } }';
+  qFn(q1).then(function(d1) {
+    if (!d1||!d1.reportData||!d1.reportData.report) throw new Error('Report not found or archived');
+    var actors = (d1.reportData.report.masterData && d1.reportData.report.masterData.actors) || [];
+    var fight = d1.reportData.report.fights && d1.reportData.report.fights[0];
+    if (!fight) throw new Error('Fight not found');
+    var actorMap = {};
+    actors.forEach(function(a) { actorMap[a.id] = a; });
+    var q2 = '{ reportData { report(code: "'+reportCode+'") {' +
+      ' deaths: events(dataType: Deaths, fightIDs: ['+fightId+'], limit: 50) { data }' +
+      ' dmgTaken: events(dataType: DamageTaken, fightIDs: ['+fightId+'], limit: 10000) { data }' +
+      ' healing: events(dataType: Healing, fightIDs: ['+fightId+'], limit: 10000) { data }' +
+      ' interrupts: events(dataType: Interrupts, fightIDs: ['+fightId+'], limit: 200) { data }' +
+      ' dispels: events(dataType: Dispels, fightIDs: ['+fightId+'], limit: 200) { data }' +
+      ' bossCasts: events(dataType: Casts, fightIDs: ['+fightId+'], hostilityType: Enemies, limit: 500) { data }' +
+      ' buffs: table(dataType: Buffs, fightIDs: ['+fightId+'])' +
+      ' } } }';
+    return qFn(q2).then(function(d2) {
+      if (!d2||!d2.reportData||!d2.reportData.report) throw new Error('No event data returned');
+      var r = d2.reportData.report;
+      var result = {
+        fight: fight, bossName: bossName, reportCode: reportCode, fightId: fightId,
+        duration: (fight.endTime||0) - (fight.startTime||0), isKill: !!fight.kill,
+        actors: actorMap,
+        deaths: (r.deaths && r.deaths.data) || [],
+        dmgTaken: (r.dmgTaken && r.dmgTaken.data) || [],
+        healing: (r.healing && r.healing.data) || [],
+        interrupts: (r.interrupts && r.interrupts.data) || [],
+        dispels: (r.dispels && r.dispels.data) || [],
+        bossCasts: (r.bossCasts && r.bossCasts.data) || [],
+        buffs: (r.buffs && r.buffs.data && r.buffs.data.auras) || [],
+        mechanics: BOSS_MECHANICS[bossName] || {}
+      };
+      result.deathRecaps = buildDeathRecaps(result);
+      result.mechAnalysis = analyzeMechanics(result);
+      result.consumableAudit = auditConsumables(result);
+      result.interruptAnalysis = analyzeInterrupts(result);
+      result.playerScores = scorePlayersForFight(result);
+      result.timeline = buildTimeline(result);
+      callback(result);
+    });
+  }).catch(function(err) { callback(null, err.message || 'Unknown error'); });
+}
+
+function buildDeathRecaps(analysis) {
+  var recaps = [];
+  analysis.deaths.forEach(function(death) {
+    var playerName = death.targetName || death.name || 'Unknown';
+    var deathTime = death.timestamp || 0;
+    var fightStart = analysis.fight.startTime || 0;
+    var relativeTime = deathTime - fightStart;
+    var dmgWindow = analysis.dmgTaken.filter(function(e) {
+      return (e.targetName === playerName || (analysis.actors[e.targetID] && analysis.actors[e.targetID].name === playerName)) &&
+             e.timestamp <= deathTime && e.timestamp >= deathTime - 15000;
+    }).sort(function(a, b) { return b.timestamp - a.timestamp; });
+    var last5 = dmgWindow.slice(0, 5).map(function(e) {
+      return { ability: (e.ability && e.ability.name) || 'Melee', source: e.sourceName || (analysis.actors[e.sourceID] && analysis.actors[e.sourceID].name) || 'Unknown',
+        amount: e.amount || 0, absorbed: e.absorbed || 0, overkill: e.overkill || 0, timestamp: e.timestamp - fightStart,
+        isAvoidable: AVOIDABLE_ABILITIES[(e.ability && e.ability.name) || ''] ? true : false };
+    });
+    var deathWindowDmg = analysis.dmgTaken.filter(function(e) {
+      return (e.targetName === playerName || (analysis.actors[e.targetID] && analysis.actors[e.targetID].name === playerName)) &&
+             e.timestamp <= deathTime && e.timestamp >= deathTime - 5000;
+    });
+    var totalDmgInWindow = 0;
+    deathWindowDmg.forEach(function(e) { totalDmgInWindow += (e.amount || 0) + (e.absorbed || 0); });
+    var healWindow = analysis.healing.filter(function(e) {
+      return (e.targetName === playerName || (analysis.actors[e.targetID] && analysis.actors[e.targetID].name === playerName)) &&
+             e.timestamp <= deathTime && e.timestamp >= deathTime - 5000;
+    });
+    var totalHealInWindow = 0;
+    healWindow.forEach(function(e) { totalHealInWindow += e.amount || 0; });
+    var killingAbility = (death.ability && death.ability.name) || death.killingAbilityName || 'Unknown';
+    recaps.push({
+      player: playerName, time: relativeTime, killingAbility: killingAbility,
+      killerName: death.killerName || (death.source && death.source.name) || 'Unknown',
+      overkill: death.overkill || 0, last5Hits: last5, totalDmgLast5s: totalDmgInWindow, totalHealLast5s: totalHealInWindow,
+      isAvoidable: AVOIDABLE_ABILITIES[killingAbility] ? true : false,
+      cls: (function(){var r=GUILD_ROSTER.find(function(x){return x.name===playerName;});return r?r.cls:'';})()
+    });
   });
+  return recaps;
+}
+
+function analyzeMechanics(analysis) {
+  var mech = analysis.mechanics;
+  var results = {avoidable: [], interrupts: []};
+  if (mech.avoidable) {
+    mech.avoidable.forEach(function(ab) {
+      var hits = analysis.dmgTaken.filter(function(e) { return e.ability && e.ability.name === ab.name; });
+      var byPlayer = {};
+      hits.forEach(function(h2) {
+        var name = h2.targetName || (analysis.actors[h2.targetID] && analysis.actors[h2.targetID].name) || '?';
+        if (!byPlayer[name]) byPlayer[name] = {count: 0, total: 0};
+        byPlayer[name].count++; byPlayer[name].total += (h2.amount || 0) + (h2.absorbed || 0);
+      });
+      results.avoidable.push({ name: ab.name, severity: ab.severity || 'medium', totalHits: hits.length,
+        totalDamage: hits.reduce(function(s, e) { return s + (e.amount || 0); }, 0), players: byPlayer });
+    });
+  }
+  if (mech.interrupts) {
+    mech.interrupts.forEach(function(intReq) {
+      var bossAttempts = analysis.bossCasts.filter(function(e) { return e.ability && e.ability.name === intReq.name; });
+      var interrupted = analysis.interrupts.filter(function(e) { return e.ability && e.ability.name === intReq.name; });
+      var interrupters = {};
+      analysis.interrupts.forEach(function(e) {
+        if (!e.ability || e.ability.name !== intReq.name) return;
+        var n = e.sourceName || (analysis.actors[e.sourceID] && analysis.actors[e.sourceID].name) || '?';
+        if (!interrupters[n]) interrupters[n] = 0; interrupters[n]++;
+      });
+      results.interrupts.push({ ability: intReq.name, target: intReq.target || '', severity: intReq.severity || 'medium',
+        attempted: bossAttempts.length, interrupted: interrupted.length, missed: Math.max(0, bossAttempts.length - interrupted.length), interrupters: interrupters });
+    });
+  }
+  return results;
+}
+
+function auditConsumables(analysis) {
+  var players = {};
+  analysis.dmgTaken.forEach(function(e) {
+    var name = e.targetName || (analysis.actors[e.targetID] && analysis.actors[e.targetID].name);
+    if (name && !players[name]) {
+      var r = GUILD_ROSTER.find(function(x) { return x.name === name; });
+      if (r) players[name] = {cls: r.cls, flask: false, food: false, weapon: false, pot: false, healthstone: false};
+    }
+  });
+  analysis.buffs.forEach(function(b) {
+    var bName = b.name || '';
+    var sources = b.sources || [];
+    sources.forEach(function(src) {
+      var sName = src.name || (analysis.actors[src.id] && analysis.actors[src.id].name);
+      if (!sName || !players[sName]) return;
+      if (REQUIRED_CONSUMABLES.flasks.some(function(f){return bName.indexOf(f)!==-1;}) || REQUIRED_CONSUMABLES.elixirs_battle.some(function(f){return bName.indexOf(f)!==-1;})) players[sName].flask = true;
+      if (REQUIRED_CONSUMABLES.food.some(function(f){return bName.indexOf(f)!==-1;}) || bName==='Well Fed') players[sName].food = true;
+      if (REQUIRED_CONSUMABLES.weapon.some(function(f){return bName.indexOf(f)!==-1;})) players[sName].weapon = true;
+      if (REQUIRED_CONSUMABLES.potions.some(function(f){return bName.indexOf(f)!==-1;})) players[sName].pot = true;
+      if (bName.indexOf('Healthstone')!==-1) players[sName].healthstone = true;
+    });
+  });
+  return players;
+}
+
+function analyzeInterrupts(analysis) {
+  var byPlayer = {};
+  analysis.interrupts.forEach(function(e) {
+    var name = e.sourceName || (analysis.actors[e.sourceID] && analysis.actors[e.sourceID].name) || '?';
+    if (!byPlayer[name]) byPlayer[name] = {count: 0, abilities: {}};
+    byPlayer[name].count++;
+    var ab = (e.ability && e.ability.name) || '?';
+    if (!byPlayer[name].abilities[ab]) byPlayer[name].abilities[ab] = 0; byPlayer[name].abilities[ab]++;
+  });
+  return byPlayer;
+}
+
+function scorePlayersForFight(analysis) {
+  var scores = {};
+  var fightDur = analysis.duration / 1000;
+  var allPlayers = {};
+  analysis.deathRecaps.forEach(function(d) { allPlayers[d.player] = d.cls; });
+  analysis.dmgTaken.forEach(function(e) {
+    var name = e.targetName || (analysis.actors[e.targetID] && analysis.actors[e.targetID].name);
+    if (name) { var r = GUILD_ROSTER.find(function(x){return x.name===name;}); if (r) allPlayers[name] = r.cls; }
+  });
+  Object.keys(allPlayers).forEach(function(name) {
+    var score = 100, deductions = [];
+    var death = analysis.deathRecaps.find(function(d) { return d.player === name; });
+    if (death) {
+      var deathPct = fightDur > 0 ? (death.time / 1000) / fightDur : 1;
+      var deathPenalty = Math.round((1 - deathPct) * 40);
+      score -= deathPenalty; deductions.push({reason: 'Died at ' + formatMs(death.time) + (death.isAvoidable ? ' (AVOIDABLE)' : ''), points: -deathPenalty});
+      if (death.isAvoidable) { score -= 15; deductions.push({reason: 'Killed by avoidable: ' + death.killingAbility, points: -15}); }
+    }
+    var avoidHits = 0;
+    if (analysis.mechAnalysis.avoidable) {
+      analysis.mechAnalysis.avoidable.forEach(function(m) {
+        if (m.players[name]) { var hits = m.players[name].count; avoidHits += hits;
+          var penalty = Math.min(20, hits * (m.severity === 'critical' ? 8 : (m.severity === 'high' ? 5 : 3)));
+          score -= penalty; deductions.push({reason: m.name + ': hit ' + hits + 'x', points: -penalty}); }
+      });
+    }
+    var cons = analysis.consumableAudit[name];
+    if (cons) {
+      if (!cons.flask) { score -= 5; deductions.push({reason: 'No flask/elixir', points: -5}); }
+      if (!cons.food) { score -= 3; deductions.push({reason: 'No food buff', points: -3}); }
+    }
+    var intData = analysis.interruptAnalysis[name];
+    if (intData && intData.count > 0) { var bonus = Math.min(10, intData.count * 3); score += bonus; deductions.push({reason: intData.count + ' interrupts', points: bonus}); }
+    scores[name] = { score: Math.max(0, Math.min(100, score)), cls: allPlayers[name] || '', deductions: deductions, died: !!death, avoidableHits: avoidHits };
+  });
+  return scores;
+}
+
+function buildTimeline(analysis) {
+  var events = [];
+  var fightStart = analysis.fight.startTime || 0;
+  var mech = analysis.mechanics;
+  analysis.bossCasts.forEach(function(e) {
+    if (!e.ability || !e.ability.name) return;
+    var isKey = false;
+    if (mech.avoidable) mech.avoidable.forEach(function(a) { if (a.name === e.ability.name) isKey = true; });
+    if (mech.interrupts) mech.interrupts.forEach(function(a) { if (a.name === e.ability.name) isKey = true; });
+    events.push({ time: (e.timestamp || 0) - fightStart, type: 'boss_cast', name: e.ability.name, isKey: isKey, color: isKey ? '#ff2244' : '#ff8800' });
+  });
+  analysis.deaths.forEach(function(d) {
+    events.push({ time: (d.timestamp || 0) - fightStart, type: 'death', name: (d.targetName || d.name || '?') + ' \u2620', player: d.targetName || d.name || '?', color: '#ff2244' });
+  });
+  analysis.interrupts.forEach(function(e) {
+    events.push({ time: (e.timestamp || 0) - fightStart, type: 'interrupt', name: (e.sourceName || '?') + ' kicked ' + ((e.ability && e.ability.name) || '?'), color: '#22cc66' });
+  });
+  analysis.dispels.forEach(function(e) {
+    events.push({ time: (e.timestamp || 0) - fightStart, type: 'dispel', name: (e.sourceName || '?') + ' dispelled ' + ((e.ability && e.ability.name) || '?'), color: '#a855f7' });
+  });
+  events.sort(function(a, b) { return a.time - b.time; });
+  return events;
+}
+
+// ─── WIPE AUTOPSY UI ───
+function openWipeAutopsy(reportCode, fightId, bossName) {
+  if (!reportCode || !fightId) { toast('No report data for this pull'); return; }
+  if (!getWclToken()) { toast('Set up WCL first'); return; }
+  var h = '<div id="autopsyOverlay" style="position:fixed;inset:0;background:rgba(5,5,20,0.95);z-index:300;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px" onclick="if(event.target===this)this.remove()">';
+  h += '<div style="background:#111118;border:2px solid var(--neon-red);width:900px;max-width:95vw;padding:40px;text-align:center">';
+  h += '<div style="font-family:Orbitron,sans-serif;font-size:14px;color:var(--neon-red);letter-spacing:2px;margin-bottom:10px">\u2620 WIPE AUTOPSY</div>';
+  h += '<div style="color:var(--text-sub);font-size:12px">Querying WCL for deaths, damage, healing, interrupts, dispels, boss casts, buffs...</div>';
+  h += '<div style="color:#555;font-size:11px;margin-top:6px">This may take a few seconds</div></div></div>';
+  document.body.insertAdjacentHTML('beforeend', h);
+  analyzeFight(reportCode, fightId, bossName, function(result, err) {
+    var ov = document.getElementById('autopsyOverlay');
+    if (!ov) return;
+    if (!result) {
+      ov.innerHTML = '<div style="background:#111118;border:2px solid var(--neon-red);width:500px;max-width:95vw;padding:40px;text-align:center;margin:40px auto"><div style="color:var(--neon-red)">\u274c ' + (err || 'Analysis failed') + '</div><button class="btn" style="margin-top:12px" onclick="document.getElementById(\'autopsyOverlay\').remove()">CLOSE</button></div>';
+      return;
+    }
+    window._autopsyData = result;
+    if (!window._autopsyTab) window._autopsyTab = 'overview';
+    renderAutopsyUI(result);
+  });
+}
+
+function renderAutopsyUI(result) {
+  var ov = document.getElementById('autopsyOverlay');
+  if (!ov) return;
+  var tab = window._autopsyTab || 'overview';
+  var rh = '<div style="background:#111118;border:2px solid var(--neon-red);width:960px;max-width:95vw;margin:20px auto">';
+  rh += '<div style="padding:12px 20px;border-bottom:2px solid #2a2a44;display:flex;justify-content:space-between;align-items:center">';
+  rh += '<div><span style="font-family:Orbitron,sans-serif;font-size:14px;color:var(--neon-red);letter-spacing:2px">\u2620 WIPE AUTOPSY \u2014 ' + result.bossName + '</span>';
+  rh += '<span style="margin-left:12px;font-size:11px;color:var(--text-sub);font-family:Share Tech Mono,monospace">' + formatMs(result.duration) + ' \u2022 ' + result.deathRecaps.length + ' deaths \u2022 ' + (result.isKill ? '<span style="color:var(--neon-green)">KILL</span>' : '<span style="color:var(--neon-red)">WIPE</span>') + '</span></div>';
+  rh += '<button onclick="document.getElementById(\'autopsyOverlay\').remove()" style="background:none;border:none;color:#ff2244;font-size:22px;cursor:pointer">\u00d7</button></div>';
+  var tabs = [{id:'overview',icon:'\ud83d\udcca',label:'Overview'},{id:'deaths',icon:'\u2620',label:'Deaths ('+result.deathRecaps.length+')'},{id:'mechanics',icon:'\u2699',label:'Mechanics'},{id:'timeline',icon:'\u23f1',label:'Timeline'},{id:'readycheck',icon:'\ud83e\uddea',label:'Ready Check'},{id:'players',icon:'\ud83c\udfaf',label:'Players'}];
+  rh += '<div style="display:flex;gap:0;border-bottom:2px solid #2a2a44;background:#0a0a14">';
+  tabs.forEach(function(t) {
+    var active = tab === t.id;
+    rh += '<button style="font-family:Share Tech Mono,monospace;font-size:11px;padding:8px 14px;border:none;cursor:pointer;border-bottom:2px solid ' + (active ? 'var(--neon-red)' : 'transparent') + ';color:' + (active ? 'var(--neon-red)' : 'var(--text-sub)') + ';background:' + (active ? 'rgba(255,34,68,0.05)' : 'transparent') + ';font-weight:' + (active ? '900' : '400') + '" onclick="window._autopsyTab=\'' + t.id + '\';renderAutopsyUI(window._autopsyData)">' + t.icon + ' ' + t.label + '</button>';
+  });
+  rh += '</div>';
+  rh += '<div style="padding:16px 20px;max-height:70vh;overflow-y:auto;font-family:Share Tech Mono,monospace;font-size:12px">';
+  if (tab === 'overview') rh += renderAutopsyOverview(result);
+  else if (tab === 'deaths') rh += renderAutopsyDeaths(result);
+  else if (tab === 'mechanics') rh += renderAutopsyMechanics(result);
+  else if (tab === 'timeline') rh += renderAutopsyTimeline(result);
+  else if (tab === 'readycheck') rh += renderAutopsyReadyCheck(result);
+  else if (tab === 'players') rh += renderAutopsyPlayers(result);
+  rh += '</div></div>';
+  ov.innerHTML = rh;
+}
+
+function renderAutopsyOverview(r) {
+  var h = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px">';
+  h += '<div style="text-align:center;padding:10px;border:1px solid #2a2a44"><div style="font-size:20px;font-weight:900;color:var(--neon-red)">' + r.deathRecaps.length + '</div><div style="font-size:9px;color:#666">DEATHS</div></div>';
+  var avoidDeaths = r.deathRecaps.filter(function(d){return d.isAvoidable;}).length;
+  h += '<div style="text-align:center;padding:10px;border:1px solid '+(avoidDeaths?'#aa3344':'var(--neon-green)')+'"><div style="font-size:20px;font-weight:900;color:'+(avoidDeaths?'#aa3344':'var(--neon-green)')+'">' + avoidDeaths + '</div><div style="font-size:9px;color:#666">AVOIDABLE</div></div>';
+  h += '<div style="text-align:center;padding:10px;border:1px solid #2a2a44"><div style="font-size:20px;font-weight:900;color:var(--neon-cyan)">' + r.interrupts.length + '</div><div style="font-size:9px;color:#666">INTERRUPTS</div></div>';
+  h += '<div style="text-align:center;padding:10px;border:1px solid #2a2a44"><div style="font-size:20px;font-weight:900;color:#a855f7">' + r.dispels.length + '</div><div style="font-size:9px;color:#666">DISPELS</div></div>';
+  var avgScore = 0, scoreN = 0;
+  Object.keys(r.playerScores).forEach(function(n){avgScore+=r.playerScores[n].score;scoreN++;});
+  avgScore = scoreN ? Math.round(avgScore/scoreN) : 0;
+  var scoreColor = avgScore >= 80 ? '#ffd700' : (avgScore >= 60 ? 'var(--neon-green)' : (avgScore >= 40 ? 'var(--neon-orange)' : '#aa3344'));
+  h += '<div style="text-align:center;padding:10px;border:1px solid '+scoreColor+'"><div style="font-size:20px;font-weight:900;color:'+scoreColor+'">' + avgScore + '</div><div style="font-size:9px;color:#666">MECH SCORE</div></div>';
+  h += '</div>';
+  if (r.deathRecaps.length) {
+    h += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+    h += '<div style="font-weight:900;color:var(--neon-red);margin-bottom:6px">\u2620 DEATH ORDER</div>';
+    r.deathRecaps.forEach(function(d, i) {
+      var cc = clsColorFor(d.cls);
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid #12122a">';
+      h += '<span style="color:var(--neon-red);font-weight:900;min-width:20px">' + (i+1) + '</span>';
+      h += '<span style="color:var(--neon-cyan);min-width:50px">' + formatMs(d.time) + '</span>';
+      h += '<span style="color:'+cc+';font-weight:900;min-width:120px">' + d.player + '</span>';
+      h += '<span style="color:var(--neon-orange)">' + d.killingAbility + '</span>';
+      h += '<span style="color:#555;margin-left:4px">from ' + d.killerName + '</span>';
+      if (d.isAvoidable) h += '<span style="color:#aa3344;font-weight:900;font-size:10px"> \u26a0 AVOIDABLE</span>';
+      if (d.overkill > 0) h += '<span style="color:#555;font-size:10px"> (' + fmtK(d.overkill) + ' overkill)</span>';
+      h += '</div>';
+    });
+    h += '</div>';
+    if (r.deathRecaps.length >= 3) {
+      var span = r.deathRecaps[2].time - r.deathRecaps[0].time;
+      if (span < 5000) {
+        h += '<div style="padding:10px;border:1px solid var(--neon-red);background:rgba(255,34,68,0.05);margin-bottom:12px">';
+        h += '<div style="color:var(--neon-red);font-weight:900">\u26a0 RAPID DEATH CHAIN \u2014 3 deaths in ' + (span/1000).toFixed(1) + 's</div></div>';
+      }
+    }
+  }
+  if (r.mechAnalysis.avoidable.length) {
+    h += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
+    h += '<div style="font-weight:900;color:var(--neon-orange);margin-bottom:6px">\u26a0 AVOIDABLE DAMAGE</div>';
+    r.mechAnalysis.avoidable.forEach(function(m) {
+      if (!m.totalHits) return;
+      var sevColor = m.severity === 'critical' ? '#ff2244' : (m.severity === 'high' ? 'var(--neon-orange)' : 'var(--neon-cyan)');
+      h += '<div style="margin-bottom:4px"><span style="color:'+sevColor+';font-weight:900">' + m.name + '</span> <span style="color:var(--text-sub)">' + m.totalHits + ' hits \u2022 ' + fmtK(m.totalDamage) + '</span>';
+      var pns = Object.keys(m.players).sort(function(a,b){return m.players[b].count-m.players[a].count;});
+      h += '<div style="margin-left:12px;font-size:10px;color:var(--text-sub)">';
+      pns.forEach(function(pn){ var pc = clsColorFor((function(){var rr=GUILD_ROSTER.find(function(x){return x.name===pn;});return rr?rr.cls:'';})());
+        h += '<span style="color:'+pc+'">' + pn + '</span>(' + m.players[pn].count + 'x) '; });
+      h += '</div></div>';
+    });
+    h += '</div>';
+  }
+  return h;
+}
+
+function renderAutopsyDeaths(r) {
+  var h = '';
+  if (!r.deathRecaps.length) return '<div style="text-align:center;padding:30px;color:var(--text-sub)">No deaths \u2014 clean fight!</div>';
+  r.deathRecaps.forEach(function(d, i) {
+    var cc = clsColorFor(d.cls);
+    h += '<div style="margin-bottom:14px;border:1px solid '+(d.isAvoidable?'#aa3344':'#2a2a44')+'">';
+    h += '<div style="padding:8px 12px;border-bottom:1px solid #2a2a44;display:flex;justify-content:space-between;align-items:center">';
+    h += '<div><span style="color:var(--neon-red);font-weight:900;margin-right:8px">#' + (i+1) + '</span>';
+    h += '<span style="color:'+cc+';font-weight:900;font-size:14px">' + d.player + '</span></div>';
+    h += '<span style="color:var(--neon-cyan)">' + formatMs(d.time) + '</span></div>';
+    h += '<div style="padding:8px 12px;background:#0a0a14">';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:8px">';
+    h += '<div><div style="font-size:9px;color:#555">KILLING BLOW</div><div style="color:var(--neon-orange);font-weight:900">' + d.killingAbility + '</div><div style="font-size:10px;color:#555">from ' + d.killerName + '</div></div>';
+    h += '<div><div style="font-size:9px;color:#555">DMG LAST 5s</div><div style="color:var(--neon-red);font-weight:900">' + fmtK(d.totalDmgLast5s) + '</div></div>';
+    h += '<div><div style="font-size:9px;color:#555">HEAL LAST 5s</div><div style="color:var(--neon-green);font-weight:900">' + fmtK(d.totalHealLast5s) + '</div>';
+    if (d.totalDmgLast5s > 0 && d.totalHealLast5s < d.totalDmgLast5s * 0.3) h += '<div style="font-size:9px;color:#aa3344">\u26a0 Underhealed</div>';
+    h += '</div></div>';
+    if (d.last5Hits.length) {
+      h += '<div style="font-size:9px;color:#555;margin-bottom:4px">LAST DAMAGE EVENTS</div>';
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="color:#444"><th style="text-align:left;padding:2px">TIME</th><th style="text-align:left;padding:2px">ABILITY</th><th style="text-align:left;padding:2px">SOURCE</th><th style="text-align:right;padding:2px">DMG</th><th style="text-align:right;padding:2px">ABSORB</th><th style="text-align:right;padding:2px">OVERKILL</th></tr></thead><tbody>';
+      d.last5Hits.forEach(function(hit) {
+        h += '<tr style="border-bottom:1px solid #12122a"><td style="padding:2px;color:var(--neon-cyan)">' + formatMs(hit.timestamp) + '</td>';
+        h += '<td style="padding:2px;color:'+(hit.isAvoidable?'#aa3344':'var(--text-bright)')+'">' + hit.ability + (hit.isAvoidable?' \u26a0':'') + '</td>';
+        h += '<td style="padding:2px;color:#888">' + hit.source + '</td>';
+        h += '<td style="padding:2px;text-align:right;color:var(--neon-red);font-weight:900">' + fmtK(hit.amount) + '</td>';
+        h += '<td style="padding:2px;text-align:right;color:#555">' + (hit.absorbed ? fmtK(hit.absorbed) : '-') + '</td>';
+        h += '<td style="padding:2px;text-align:right;color:'+(hit.overkill?'var(--neon-red)':'#555')+'">' + (hit.overkill ? fmtK(hit.overkill) : '-') + '</td></tr>';
+      });
+      h += '</tbody></table>';
+    }
+    h += '</div></div>';
+  });
+  return h;
+}
+
+function renderAutopsyMechanics(r) {
+  var h = '', mech = r.mechanics;
+  if (!mech || (!mech.avoidable && !mech.interrupts && !mech.positioning && !mech.phases)) {
+    return '<div style="text-align:center;padding:30px;color:var(--text-sub)">No mechanic definitions for ' + r.bossName + '</div>';
+  }
+  if (r.mechAnalysis.avoidable.length) {
+    h += '<div style="margin-bottom:14px;padding:10px;border:1px solid #2a2a44"><div style="font-weight:900;color:var(--neon-orange);margin-bottom:8px">\ud83d\udd25 AVOIDABLE DAMAGE</div>';
+    r.mechAnalysis.avoidable.forEach(function(m) {
+      var grade = m.totalHits === 0 ? 'A' : (m.totalHits <= 3 ? 'B' : (m.totalHits <= 8 ? 'C' : 'F'));
+      var gradeCol = grade==='A'?'var(--neon-green)':(grade==='B'?'var(--neon-cyan)':(grade==='C'?'var(--neon-orange)':'#aa3344'));
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #12122a">';
+      h += '<div style="font-family:Orbitron,sans-serif;font-size:18px;font-weight:900;color:'+gradeCol+';min-width:30px;text-align:center">' + grade + '</div>';
+      h += '<div style="flex:1"><div style="color:var(--text-bright);font-weight:900">' + m.name + ' <span style="font-size:9px;color:#555">['+m.severity.toUpperCase()+']</span></div>';
+      if (m.totalHits) {
+        var pns = Object.keys(m.players).sort(function(a,b){return m.players[b].count-m.players[a].count;});
+        h += '<div style="font-size:10px;color:var(--text-sub)">';
+        pns.forEach(function(pn){var pc=clsColorFor((function(){var rr=GUILD_ROSTER.find(function(x){return x.name===pn;});return rr?rr.cls:'';})());h+='<span style="color:'+pc+'">'+pn+'</span>('+m.players[pn].count+'x) ';});
+        h += '</div>';
+      } else { h += '<div style="font-size:10px;color:var(--neon-green)">\u2705 Nobody hit</div>'; }
+      h += '</div><div style="color:var(--text-sub);font-size:11px;min-width:70px;text-align:right">' + m.totalHits + ' hits<br>' + fmtK(m.totalDamage) + '</div></div>';
+    });
+    h += '</div>';
+  }
+  if (r.mechAnalysis.interrupts.length) {
+    h += '<div style="margin-bottom:14px;padding:10px;border:1px solid #2a2a44"><div style="font-weight:900;color:var(--neon-cyan);margin-bottom:8px">\u26a1 INTERRUPT COVERAGE</div>';
+    r.mechAnalysis.interrupts.forEach(function(m) {
+      var grade = m.missed===0?'A':(m.missed<=1?'B':(m.missed<=3?'C':'F'));
+      var gradeCol = grade==='A'?'var(--neon-green)':(grade==='B'?'var(--neon-cyan)':(grade==='C'?'var(--neon-orange)':'#aa3344'));
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #12122a">';
+      h += '<div style="font-family:Orbitron,sans-serif;font-size:18px;font-weight:900;color:'+gradeCol+';min-width:30px;text-align:center">' + grade + '</div>';
+      h += '<div style="flex:1"><div style="color:var(--text-bright);font-weight:900">' + m.ability + (m.target?' <span style="color:#555">on '+m.target+'</span>':'') + '</div>';
+      h += '<div style="font-size:10px;color:var(--text-sub)">' + m.interrupted + '/' + m.attempted + ' interrupted';
+      if (Object.keys(m.interrupters).length) { h += ' \u2014 '; Object.keys(m.interrupters).forEach(function(n){h+=n+'('+m.interrupters[n]+') ';}); }
+      h += '</div></div><div style="color:'+(m.missed?'#aa3344':'var(--neon-green)')+';font-weight:900;min-width:60px;text-align:right">'+(m.missed?m.missed+' MISSED':'\u2705 ALL')+'</div></div>';
+    });
+    h += '</div>';
+  }
+  if (mech.phases && mech.phases.length) {
+    h += '<div style="padding:10px;border:1px solid #2a2a44"><div style="font-weight:900;color:var(--text-sub);margin-bottom:6px">\ud83d\udcdd PHASES</div>';
+    mech.phases.forEach(function(p){h+='<div style="padding:3px 0"><span style="color:var(--neon-cyan);font-weight:900">'+p.name+'</span> \u2014 <span style="color:var(--text-sub)">'+p.desc+'</span></div>';});
+    h += '</div>';
+  }
+  return h;
+}
+
+function renderAutopsyTimeline(r) {
+  var h = '', dur = r.duration;
+  if (!dur || dur <= 0) return '<div style="text-align:center;padding:30px;color:var(--text-sub)">No timeline data</div>';
+  var w = 880, padL = 50, padR = 10, barH = 80, chartW = w - padL - padR;
+  h += '<div style="font-weight:900;color:var(--neon-cyan);margin-bottom:8px">\u23f1 FIGHT TIMELINE \u2014 ' + formatMs(dur) + '</div>';
+  h += '<svg viewBox="0 0 ' + w + ' ' + (barH + 60) + '" style="width:100%;display:block;min-height:120px">';
+  h += '<rect x="' + padL + '" y="10" width="' + chartW + '" height="' + barH + '" fill="#0a0a16" rx="3"/>';
+  var ticks = Math.min(12, Math.ceil(dur / 30000));
+  for (var ti = 0; ti <= ticks; ti++) {
+    var tx = padL + (ti / ticks) * chartW;
+    h += '<line x1="'+tx+'" y1="10" x2="'+tx+'" y2="'+(barH+10)+'" stroke="#1a1a34" stroke-width="1"/>';
+    h += '<text x="'+tx+'" y="'+(barH+25)+'" fill="#4455aa" font-size="9" text-anchor="middle" font-family="Share Tech Mono,monospace">' + formatMs(Math.round(ti/ticks*dur)) + '</text>';
+  }
+  var keyCasts = r.timeline.filter(function(e){return e.type==='boss_cast'&&e.isKey;});
+  keyCasts.forEach(function(e){var ex=padL+(e.time/dur)*chartW;
+    h+='<line x1="'+ex+'" y1="12" x2="'+ex+'" y2="'+(barH/3+10)+'" stroke="'+e.color+'" stroke-width="2" opacity="0.6"/>';
+    h+='<circle cx="'+ex+'" cy="18" r="3" fill="'+e.color+'"><title>'+formatMs(e.time)+' '+e.name+'</title></circle>';
+  });
+  var deathEvents = r.timeline.filter(function(e){return e.type==='death';});
+  deathEvents.forEach(function(e){var ex=padL+(e.time/dur)*chartW;
+    h+='<line x1="'+ex+'" y1="'+(barH/3+12)+'" x2="'+ex+'" y2="'+(barH*2/3+10)+'" stroke="#ff2244" stroke-width="2"/>';
+    h+='<text x="'+ex+'" y="'+(barH/2+14)+'" fill="#ff2244" font-size="12" text-anchor="middle">\u2620</text>';
+    h+='<text x="'+ex+'" y="'+(barH/2+26)+'" fill="#ff2244" font-size="8" text-anchor="middle" font-family="Share Tech Mono,monospace">'+e.player+'</text>';
+  });
+  var intEvents = r.timeline.filter(function(e){return e.type==='interrupt';});
+  intEvents.forEach(function(e){var ex=padL+(e.time/dur)*chartW;
+    h+='<circle cx="'+ex+'" cy="'+(barH*2/3+18)+'" r="2.5" fill="#22cc66"><title>'+formatMs(e.time)+' '+e.name+'</title></circle>';
+  });
+  h += '<text x="'+(padL-4)+'" y="22" fill="#ff8800" font-size="8" text-anchor="end" font-family="Share Tech Mono,monospace">BOSS</text>';
+  h += '<text x="'+(padL-4)+'" y="'+(barH/2+14)+'" fill="#ff2244" font-size="8" text-anchor="end" font-family="Share Tech Mono,monospace">DEATHS</text>';
+  h += '<text x="'+(padL-4)+'" y="'+(barH*2/3+20)+'" fill="#22cc66" font-size="8" text-anchor="end" font-family="Share Tech Mono,monospace">KICKS</text>';
+  h += '</svg>';
+  h += '<div style="margin-top:12px;padding:10px;border:1px solid #2a2a44;max-height:300px;overflow-y:auto">';
+  h += '<div style="font-weight:900;color:var(--text-sub);margin-bottom:6px">EVENT LOG</div>';
+  r.timeline.forEach(function(e) {
+    if (e.type === 'boss_cast' && !e.isKey) return;
+    var icon = e.type==='death'?'\u2620':(e.type==='interrupt'?'\u26a1':(e.type==='dispel'?'\ud83d\udc9c':'\ud83d\udd25'));
+    h += '<div style="display:flex;gap:8px;padding:2px 0;border-bottom:1px solid #0e0e1c;font-size:11px">';
+    h += '<span style="color:var(--neon-cyan);min-width:40px">' + formatMs(e.time) + '</span><span>' + icon + '</span><span style="color:' + e.color + '">' + e.name + '</span></div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+function renderAutopsyReadyCheck(r) {
+  var h = '', players = r.consumableAudit, pNames = Object.keys(players).sort();
+  if (!pNames.length) return '<div style="text-align:center;padding:30px;color:var(--text-sub)">No consumable data available</div>';
+  var flaskCount=0,foodCount=0,potCount=0;
+  pNames.forEach(function(n){if(players[n].flask)flaskCount++;if(players[n].food)foodCount++;if(players[n].pot)potCount++;});
+  h += '<div style="display:flex;gap:16px;margin-bottom:12px;justify-content:center">';
+  h += svgRing(Math.round(flaskCount/pNames.length*100), {size:80, color:flaskCount>=pNames.length*0.8?'#22cc66':'#ff8800', label:'FLASK'});
+  h += svgRing(Math.round(foodCount/pNames.length*100), {size:80, color:foodCount>=pNames.length*0.8?'#22cc66':'#ff8800', label:'FOOD'});
+  h += svgRing(Math.round(potCount/pNames.length*100), {size:80, color:potCount>=pNames.length*0.8?'#22cc66':'#ff8800', label:'POT'});
+  h += '</div>';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="color:#666;border-bottom:1px solid var(--border)">';
+  h += '<th style="text-align:left;padding:4px">PLAYER</th><th style="text-align:center;padding:4px">FLASK</th><th style="text-align:center;padding:4px">FOOD</th><th style="text-align:center;padding:4px">WEAPON</th><th style="text-align:center;padding:4px">POT</th><th style="text-align:center;padding:4px">STONE</th></tr></thead><tbody>';
+  pNames.forEach(function(n) {
+    var p = players[n], cc = clsColorFor(p.cls);
+    h += '<tr style="border-bottom:1px solid #12122a"><td style="padding:4px;color:'+cc+';font-weight:900">' + n + '</td>';
+    h += '<td style="padding:4px;text-align:center">' + (p.flask?'<span style="color:var(--neon-green)">\u2705</span>':'<span style="color:#aa3344">\u274c</span>') + '</td>';
+    h += '<td style="padding:4px;text-align:center">' + (p.food?'<span style="color:var(--neon-green)">\u2705</span>':'<span style="color:#aa3344">\u274c</span>') + '</td>';
+    h += '<td style="padding:4px;text-align:center">' + (p.weapon?'<span style="color:var(--neon-green)">\u2705</span>':'<span style="color:#555">?</span>') + '</td>';
+    h += '<td style="padding:4px;text-align:center">' + (p.pot?'<span style="color:var(--neon-green)">\u2705</span>':'<span style="color:#555">\u2014</span>') + '</td>';
+    h += '<td style="padding:4px;text-align:center">' + (p.healthstone?'<span style="color:var(--neon-green)">\u2705</span>':'<span style="color:#555">\u2014</span>') + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  return h;
+}
+
+function renderAutopsyPlayers(r) {
+  var h = '', scores = r.playerScores;
+  var sorted = Object.keys(scores).sort(function(a,b){return scores[b].score-scores[a].score;});
+  if (!sorted.length) return '<div style="text-align:center;padding:30px;color:var(--text-sub)">No player data</div>';
+  h += '<div style="font-weight:900;color:var(--neon-cyan);margin-bottom:8px">\ud83c\udfaf MECHANICAL EXECUTION SCORE</div>';
+  h += '<div style="font-size:10px;color:var(--text-sub);margin-bottom:10px">Score based on: death timing, avoidable damage, consumables, interrupts</div>';
+  sorted.forEach(function(name) {
+    var s = scores[name], cc = clsColorFor(s.cls);
+    var barCol = s.score>=80?'#ffd700':(s.score>=60?'var(--neon-green)':(s.score>=40?'var(--neon-orange)':'#aa3344'));
+    h += '<div style="margin-bottom:6px;padding:6px 10px;border:1px solid #1a1a34">';
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
+    h += '<div style="font-family:Orbitron,sans-serif;font-size:18px;font-weight:900;color:'+barCol+';min-width:36px;text-align:center">' + s.score + '</div>';
+    h += '<span style="color:'+cc+';font-weight:900;font-size:13px;flex:1">' + name + '</span>';
+    if (s.died) h += '<span style="color:#aa3344;font-size:10px">\u2620 DIED</span>';
+    if (s.avoidableHits) h += '<span style="color:var(--neon-orange);font-size:10px">\u26a0 '+s.avoidableHits+' avoidable</span>';
+    h += '</div>';
+    h += '<div style="height:6px;background:#1a1a2e;border-radius:3px;overflow:hidden;margin-bottom:4px"><div style="width:'+s.score+'%;height:100%;background:'+barCol+';border-radius:3px"></div></div>';
+    if (s.deductions.length) {
+      h += '<div style="font-size:10px;color:var(--text-sub)">';
+      s.deductions.forEach(function(d2){h+='<span style="color:'+(d2.points>0?'var(--neon-green)':'#aa3344')+'">'+(d2.points>0?'+':'')+d2.points+'</span> '+d2.reason+' \u2022 ';});
+      h = h.replace(/ \u2022 $/, '');
+      h += '</div>';
+    }
+    h += '</div>';
+  });
+  return h;
 }
 
 function formatMs(ms){var s=Math.round(ms/1000);var m=Math.floor(s/60);s=s%60;return m+':'+(s<10?'0':'')+s;}
