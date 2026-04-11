@@ -9202,6 +9202,7 @@ var BOSS_MECHANICS = {
 // ─── COMPREHENSIVE FIGHT ANALYZER ───
 function analyzeFight(reportCode, fightId, bossName, callback) {
   var qFn = getWclUserToken() ? wclUserQuery : wclQuery;
+  // Query 1: fight metadata
   var q1 = '{ reportData { report(code: "'+reportCode+'") { masterData { actors { id name type subType } } fights(fightIDs: ['+fightId+']) { id name startTime endTime kill } } } }';
   qFn(q1).then(function(d1) {
     if (!d1||!d1.reportData||!d1.reportData.report) throw new Error('Report not found or archived');
@@ -9210,85 +9211,125 @@ function analyzeFight(reportCode, fightId, bossName, callback) {
     if (!fight) throw new Error('Fight not found');
     var actorMap = {};
     actors.forEach(function(a) { actorMap[a.id] = a; });
+    console.log('[AUTOPSY] Fight:', fight.name, 'Duration:', ((fight.endTime||0)-(fight.startTime||0))/1000+'s', 'Actors:', actors.length);
+    
+    // Query 2: ALL data — events with useActorIDs:false for names + table() for aggregates
     var q2 = '{ reportData { report(code: "'+reportCode+'") {' +
-      ' deaths: events(dataType: Deaths, fightIDs: ['+fightId+'], limit: 50) { data }' +
-      ' dmgTaken: events(dataType: DamageTaken, fightIDs: ['+fightId+'], limit: 10000) { data }' +
-      ' healing: events(dataType: Healing, fightIDs: ['+fightId+'], limit: 10000) { data }' +
-      ' interrupts: events(dataType: Interrupts, fightIDs: ['+fightId+'], limit: 200) { data }' +
-      ' dispels: events(dataType: Dispels, fightIDs: ['+fightId+'], limit: 200) { data }' +
-      ' bossCasts: events(dataType: Casts, fightIDs: ['+fightId+'], hostilityType: Enemies, limit: 500) { data }' +
+      // events() with useActorIDs:false — returns NAME STRINGS instead of numeric IDs
+      ' deaths: events(dataType: Deaths, fightIDs: ['+fightId+'], limit: 50, useActorIDs: false, useAbilityIDs: false) { data }' +
+      ' dmgTaken: events(dataType: DamageTaken, fightIDs: ['+fightId+'], limit: 10000, useActorIDs: false, useAbilityIDs: false) { data }' +
+      ' healing: events(dataType: Healing, fightIDs: ['+fightId+'], limit: 10000, useActorIDs: false, useAbilityIDs: false) { data }' +
+      ' interrupts: events(dataType: Interrupts, fightIDs: ['+fightId+'], limit: 200, useActorIDs: false, useAbilityIDs: false) { data }' +
+      ' dispels: events(dataType: Dispels, fightIDs: ['+fightId+'], limit: 200, useActorIDs: false, useAbilityIDs: false) { data }' +
+      ' bossCasts: events(dataType: Casts, fightIDs: ['+fightId+'], hostilityType: Enemies, limit: 500, useActorIDs: false, useAbilityIDs: false) { data }' +
+      // table() for aggregated data with pre-resolved names
+      ' deathTable: table(dataType: Deaths, fightIDs: ['+fightId+'])' +
+      ' dmgTable: table(dataType: DamageTaken, fightIDs: ['+fightId+'])' +
       ' buffs: table(dataType: Buffs, fightIDs: ['+fightId+'])' +
       ' } } }';
+    
     return qFn(q2).then(function(d2) {
       if (!d2||!d2.reportData||!d2.reportData.report) throw new Error('No event data returned');
       var r = d2.reportData.report;
+      
+      var deathEvents = (r.deaths && r.deaths.data) || [];
+      var dmgEvents = (r.dmgTaken && r.dmgTaken.data) || [];
+      var healEvents = (r.healing && r.healing.data) || [];
+      var intEvents = (r.interrupts && r.interrupts.data) || [];
+      var dispEvents = (r.dispels && r.dispels.data) || [];
+      var bossEvents = (r.bossCasts && r.bossCasts.data) || [];
+      var deathTableEntries = (r.deathTable && r.deathTable.data && r.deathTable.data.entries) || [];
+      var dmgTableEntries = (r.dmgTable && r.dmgTable.data && r.dmgTable.data.entries) || [];
+      var buffAuras = (r.buffs && r.buffs.data && r.buffs.data.auras) || [];
+      
+      // Debug logging — dump first event of each type to see field names
+      if (deathEvents.length) console.log('[AUTOPSY] Death event sample:', JSON.stringify(deathEvents[0]).substring(0, 500));
+      if (dmgEvents.length) console.log('[AUTOPSY] DmgTaken event sample:', JSON.stringify(dmgEvents[0]).substring(0, 500));
+      if (intEvents.length) console.log('[AUTOPSY] Interrupt event sample:', JSON.stringify(intEvents[0]).substring(0, 500));
+      if (dispEvents.length) console.log('[AUTOPSY] Dispel event sample:', JSON.stringify(dispEvents[0]).substring(0, 500));
+      if (bossEvents.length) console.log('[AUTOPSY] Boss cast event sample:', JSON.stringify(bossEvents[0]).substring(0, 500));
+      if (deathTableEntries.length) console.log('[AUTOPSY] Death table sample:', JSON.stringify(deathTableEntries[0]).substring(0, 500));
+      if (dmgTableEntries.length) console.log('[AUTOPSY] DmgTable sample:', JSON.stringify(dmgTableEntries[0]).substring(0, 500));
+      if (buffAuras.length) console.log('[AUTOPSY] Buff aura sample:', JSON.stringify(buffAuras[0]).substring(0, 500));
+      console.log('[AUTOPSY] Counts — deaths:', deathEvents.length, 'dmg:', dmgEvents.length, 'heal:', healEvents.length, 'int:', intEvents.length, 'disp:', dispEvents.length, 'boss:', bossEvents.length, 'deathTbl:', deathTableEntries.length, 'dmgTbl:', dmgTableEntries.length, 'buffs:', buffAuras.length);
+      
       var result = {
         fight: fight, bossName: bossName, reportCode: reportCode, fightId: fightId,
         duration: (fight.endTime||0) - (fight.startTime||0), isKill: !!fight.kill,
         actors: actorMap,
-        deaths: (r.deaths && r.deaths.data) || [],
-        dmgTaken: (r.dmgTaken && r.dmgTaken.data) || [],
-        healing: (r.healing && r.healing.data) || [],
-        interrupts: (r.interrupts && r.interrupts.data) || [],
-        dispels: (r.dispels && r.dispels.data) || [],
-        bossCasts: (r.bossCasts && r.bossCasts.data) || [],
-        buffs: (r.buffs && r.buffs.data && r.buffs.data.auras) || [],
+        deaths: deathEvents,
+        dmgTaken: dmgEvents,
+        healing: healEvents,
+        interrupts: intEvents,
+        dispels: dispEvents,
+        bossCasts: bossEvents,
+        deathTable: deathTableEntries,
+        dmgTable: dmgTableEntries,
+        buffs: buffAuras,
         mechanics: BOSS_MECHANICS[bossName] || {}
       };
+      
       result.deathRecaps = buildDeathRecaps(result);
       result.mechAnalysis = analyzeMechanics(result);
       result.consumableAudit = auditConsumables(result);
       result.interruptAnalysis = analyzeInterrupts(result);
       result.playerScores = scorePlayersForFight(result);
       result.timeline = buildTimeline(result);
+      console.log('[AUTOPSY] Analysis complete — deathRecaps:', result.deathRecaps.length, 'mechAvoid:', result.mechAnalysis.avoidable.length, 'players:', Object.keys(result.playerScores).length);
       callback(result);
     });
-  }).catch(function(err) { callback(null, err.message || 'Unknown error'); });
+  }).catch(function(err) { console.error('[AUTOPSY] Error:', err); callback(null, err.message || 'Unknown error'); });
 }
 
 // Actor name resolver helper
-function _an(id, actors) { var a = actors[id]; return a ? a.name : null; }
+// Resolve name from event — handles both useActorIDs:true (number) and false (string)
+function _rn(idOrName, actors) {
+  if (!idOrName) return null;
+  if (typeof idOrName === 'string') return idOrName;
+  var a = actors[idOrName]; return a ? a.name : null;
+}
+function _abn(e) {
+  if (!e) return 'Unknown';
+  if (e.ability && e.ability.name) return e.ability.name;
+  if (e.ability && typeof e.ability === 'string') return e.ability;
+  if (e.abilityGameID) return 'Spell#' + e.abilityGameID;
+  return 'Unknown';
+}
 
 function buildDeathRecaps(analysis) {
-  var recaps = [];
-  var A = analysis.actors;
+  var recaps = [], A = analysis.actors;
   analysis.deaths.forEach(function(death) {
-    var playerName = death.targetName || _an(death.targetID, A) || death.name || 'Unknown';
+    var playerName = death.targetName || _rn(death.targetID, A) || death.name || 'Unknown';
     var deathTime = death.timestamp || 0;
     var fightStart = analysis.fight.startTime || 0;
     var relativeTime = deathTime - fightStart;
-    // Match damage events by targetID (primary) or targetName (fallback)
-    var targetId = death.targetID;
     var dmgWindow = analysis.dmgTaken.filter(function(e) {
-      return (e.targetID === targetId || e.targetName === playerName) &&
-             e.timestamp <= deathTime && e.timestamp >= deathTime - 15000;
+      var tn = e.targetName || _rn(e.targetID, A) || '';
+      return tn === playerName && e.timestamp <= deathTime && e.timestamp >= deathTime - 15000;
     }).sort(function(a, b) { return b.timestamp - a.timestamp; });
     var last5 = dmgWindow.slice(0, 5).map(function(e) {
-      return { ability: (e.ability && e.ability.name) || 'Melee', source: e.sourceName || _an(e.sourceID, A) || 'Unknown',
-        amount: e.amount || 0, absorbed: e.absorbed || 0, overkill: e.overkill || 0, timestamp: e.timestamp - fightStart,
-        isAvoidable: AVOIDABLE_ABILITIES[(e.ability && e.ability.name) || ''] ? true : false };
+      var abName = _abn(e);
+      return { ability: abName, source: e.sourceName || _rn(e.sourceID, A) || 'Unknown',
+        amount: e.amount || 0, absorbed: e.absorbed || 0, overkill: e.overkill || 0,
+        timestamp: e.timestamp - fightStart, isAvoidable: AVOIDABLE_ABILITIES[abName] ? true : false };
     });
-    var deathWindowDmg = analysis.dmgTaken.filter(function(e) {
-      return (e.targetID === targetId || e.targetName === playerName) &&
-             e.timestamp <= deathTime && e.timestamp >= deathTime - 5000;
+    var dwd = analysis.dmgTaken.filter(function(e) {
+      var tn = e.targetName || _rn(e.targetID, A) || '';
+      return tn === playerName && e.timestamp <= deathTime && e.timestamp >= deathTime - 5000;
     });
-    var totalDmgInWindow = 0;
-    deathWindowDmg.forEach(function(e) { totalDmgInWindow += (e.amount || 0) + (e.absorbed || 0); });
-    var healWindow = analysis.healing.filter(function(e) {
-      return (e.targetID === targetId || e.targetName === playerName) &&
-             e.timestamp <= deathTime && e.timestamp >= deathTime - 5000;
+    var totalDmg5s = 0; dwd.forEach(function(e) { totalDmg5s += (e.amount || 0) + (e.absorbed || 0); });
+    var hw = analysis.healing.filter(function(e) {
+      var tn = e.targetName || _rn(e.targetID, A) || '';
+      return tn === playerName && e.timestamp <= deathTime && e.timestamp >= deathTime - 5000;
     });
-    var totalHealInWindow = 0;
-    healWindow.forEach(function(e) { totalHealInWindow += e.amount || 0; });
-    var killingAbility = (death.ability && death.ability.name) || death.killingAbilityName || (death.killingAbility && death.killingAbility.name) || 'Unknown';
-    var killerName = death.killerName || _an(death.killerID, A) || _an(death.sourceID, A) || (death.source && death.source.name) || 'Unknown';
-    recaps.push({
-      player: playerName, time: relativeTime, killingAbility: killingAbility,
-      killerName: killerName,
-      overkill: death.overkill || 0, last5Hits: last5, totalDmgLast5s: totalDmgInWindow, totalHealLast5s: totalHealInWindow,
+    var totalHeal5s = 0; hw.forEach(function(e) { totalHeal5s += e.amount || 0; });
+    var killingAbility = _abn(death);
+    if (killingAbility === 'Unknown') killingAbility = death.killingAbilityName || (death.killingAbility && (death.killingAbility.name || death.killingAbility)) || 'Unknown';
+    var killerName = death.killerName || _rn(death.killerID, A) || _rn(death.sourceID, A) || (death.source && (typeof death.source === 'string' ? death.source : death.source.name)) || 'Unknown';
+    recaps.push({ player: playerName, time: relativeTime, killingAbility: killingAbility, killerName: killerName,
+      overkill: death.overkill || 0, last5Hits: last5, totalDmgLast5s: totalDmg5s, totalHealLast5s: totalHeal5s,
       isAvoidable: AVOIDABLE_ABILITIES[killingAbility] ? true : false,
-      cls: (function(){var r=GUILD_ROSTER.find(function(x){return x.name===playerName;});return r?r.cls:'';})()
-    });
+      cls: (function(){var r=GUILD_ROSTER.find(function(x){return x.name===playerName;});return r?r.cls:'';})() });
   });
   return recaps;
 }
@@ -9298,10 +9339,10 @@ function analyzeMechanics(analysis) {
   var results = {avoidable: [], interrupts: []};
   if (mech.avoidable) {
     mech.avoidable.forEach(function(ab) {
-      var hits = analysis.dmgTaken.filter(function(e) { return e.ability && e.ability.name === ab.name; });
+      var hits = analysis.dmgTaken.filter(function(e) { return _abn(e) === ab.name; });
       var byPlayer = {};
       hits.forEach(function(h2) {
-        var name = h2.targetName || _an(h2.targetID, A) || '?';
+        var name = h2.targetName || _rn(h2.targetID, A) || '?';
         if (!byPlayer[name]) byPlayer[name] = {count: 0, total: 0};
         byPlayer[name].count++; byPlayer[name].total += (h2.amount || 0) + (h2.absorbed || 0);
       });
@@ -9311,12 +9352,12 @@ function analyzeMechanics(analysis) {
   }
   if (mech.interrupts) {
     mech.interrupts.forEach(function(intReq) {
-      var bossAttempts = analysis.bossCasts.filter(function(e) { return e.ability && e.ability.name === intReq.name; });
-      var interrupted = analysis.interrupts.filter(function(e) { return e.ability && e.ability.name === intReq.name; });
+      var bossAttempts = analysis.bossCasts.filter(function(e) { return _abn(e) === intReq.name; });
+      var interrupted = analysis.interrupts.filter(function(e) { return _abn(e) === intReq.name; });
       var interrupters = {};
       analysis.interrupts.forEach(function(e) {
-        if (!e.ability || e.ability.name !== intReq.name) return;
-        var n = e.sourceName || _an(e.sourceID, A) || '?';
+        if (_abn(e) !== intReq.name) return;
+        var n = e.sourceName || _rn(e.sourceID, A) || '?';
         if (!interrupters[n]) interrupters[n] = 0; interrupters[n]++;
       });
       results.interrupts.push({ ability: intReq.name, target: intReq.target || '', severity: intReq.severity || 'medium',
@@ -9328,36 +9369,34 @@ function analyzeMechanics(analysis) {
 
 function auditConsumables(analysis) {
   var players = {}, A = analysis.actors;
-  // Build player list from actors (type Player)
+  // Build player list from table() data (pre-resolved names) + actors + events
+  if (analysis.deathTable) analysis.deathTable.forEach(function(e) {
+    if (e.name) { var r = GUILD_ROSTER.find(function(x){return x.name===e.name;}); if (r && !players[e.name]) players[e.name] = {cls:r.cls,flask:false,food:false,weapon:false,pot:false,healthstone:false}; }
+  });
+  if (analysis.dmgTable) analysis.dmgTable.forEach(function(e) {
+    if (e.name) { var r = GUILD_ROSTER.find(function(x){return x.name===e.name;}); if (r && !players[e.name]) players[e.name] = {cls:r.cls,flask:false,food:false,weapon:false,pot:false,healthstone:false}; }
+  });
   Object.keys(A).forEach(function(id) {
-    var a = A[id];
-    if (a.type === 'Player' || a.type === 'player') {
-      var r = GUILD_ROSTER.find(function(x) { return x.name === a.name; });
-      if (r) players[a.name] = {cls: r.cls, flask: false, food: false, weapon: false, pot: false, healthstone: false};
+    var a = A[id]; if (a.type && a.type.toLowerCase() === 'player') {
+      var r = GUILD_ROSTER.find(function(x){return x.name===a.name;}); if (r && !players[a.name]) players[a.name] = {cls:r.cls,flask:false,food:false,weapon:false,pot:false,healthstone:false};
     }
   });
-  // Fallback: also check dmgTaken targets
   analysis.dmgTaken.forEach(function(e) {
-    var name = e.targetName || _an(e.targetID, A);
-    if (name && !players[name]) {
-      var r = GUILD_ROSTER.find(function(x) { return x.name === name; });
-      if (r) players[name] = {cls: r.cls, flask: false, food: false, weapon: false, pot: false, healthstone: false};
-    }
+    var name = e.targetName || _rn(e.targetID, A);
+    if (name && !players[name]) { var r = GUILD_ROSTER.find(function(x){return x.name===name;}); if (r) players[name] = {cls:r.cls,flask:false,food:false,weapon:false,pot:false,healthstone:false}; }
   });
-  // Buffs from table() come as auras with sources array
+  // Buffs from table()
   analysis.buffs.forEach(function(b) {
     var bName = b.name || '';
-    var isFlask = REQUIRED_CONSUMABLES.flasks.some(function(f){return bName.indexOf(f)!==-1;}) || REQUIRED_CONSUMABLES.elixirs_battle.some(function(f){return bName.indexOf(f)!==-1;});
+    var isFlask = REQUIRED_CONSUMABLES.flasks.some(function(f){return bName.indexOf(f)!==-1;}) || REQUIRED_CONSUMABLES.elixirs_battle.some(function(f){return bName.indexOf(f)!==-1;}) || REQUIRED_CONSUMABLES.elixirs_guardian.some(function(f){return bName.indexOf(f)!==-1;});
     var isFood = REQUIRED_CONSUMABLES.food.some(function(f){return bName.indexOf(f)!==-1;}) || bName==='Well Fed';
     var isWeapon = REQUIRED_CONSUMABLES.weapon.some(function(f){return bName.indexOf(f)!==-1;});
     var isPot = REQUIRED_CONSUMABLES.potions.some(function(f){return bName.indexOf(f)!==-1;});
     var isStone = bName.indexOf('Healthstone')!==-1;
     if (!isFlask && !isFood && !isWeapon && !isPot && !isStone) return;
-    // table() buffs have totalUses, totalUptime, and bands per player
-    // Try sources array first
-    var sources = b.sources || b.entries || [];
+    var sources = b.sources || b.entries || b.bands || [];
     sources.forEach(function(src) {
-      var sName = src.name || _an(src.id, A);
+      var sName = src.name || _rn(src.id, A);
       if (!sName || !players[sName]) return;
       if (isFlask) players[sName].flask = true;
       if (isFood) players[sName].food = true;
@@ -9365,10 +9404,6 @@ function auditConsumables(analysis) {
       if (isPot) players[sName].pot = true;
       if (isStone) players[sName].healthstone = true;
     });
-    // If no sources but buff exists, it might be a global buff — check totalUptime
-    if (!sources.length && b.totalUptime > 0) {
-      // Can't attribute to specific players without sources
-    }
   });
   return players;
 }
@@ -9376,32 +9411,21 @@ function auditConsumables(analysis) {
 function analyzeInterrupts(analysis) {
   var byPlayer = {}, A = analysis.actors;
   analysis.interrupts.forEach(function(e) {
-    var name = e.sourceName || _an(e.sourceID, A) || '?';
+    var name = e.sourceName || _rn(e.sourceID, A) || '?';
     if (!byPlayer[name]) byPlayer[name] = {count: 0, abilities: {}};
     byPlayer[name].count++;
-    var ab = (e.ability && e.ability.name) || '?';
+    var ab = _abn(e);
     if (!byPlayer[name].abilities[ab]) byPlayer[name].abilities[ab] = 0; byPlayer[name].abilities[ab]++;
   });
   return byPlayer;
 }
 
 function scorePlayersForFight(analysis) {
-  var scores = {};
-  var fightDur = analysis.duration / 1000;
-  var allPlayers = {}, A = analysis.actors;
+  var scores = {}, fightDur = analysis.duration / 1000, allPlayers = {}, A = analysis.actors;
   analysis.deathRecaps.forEach(function(d) { allPlayers[d.player] = d.cls; });
-  // Also get players from actors list
-  Object.keys(A).forEach(function(id) {
-    var a = A[id];
-    if (a.type === 'Player' || a.type === 'player') {
-      var r = GUILD_ROSTER.find(function(x) { return x.name === a.name; });
-      if (r) allPlayers[a.name] = r.cls;
-    }
-  });
-  analysis.dmgTaken.forEach(function(e) {
-    var name = e.targetName || _an(e.targetID, A);
-    if (name) { var r = GUILD_ROSTER.find(function(x){return x.name===name;}); if (r) allPlayers[name] = r.cls; }
-  });
+  Object.keys(A).forEach(function(id) { var a = A[id]; if (a.type && a.type.toLowerCase() === 'player') { var r = GUILD_ROSTER.find(function(x){return x.name===a.name;}); if (r) allPlayers[a.name] = r.cls; } });
+  if (analysis.dmgTable) analysis.dmgTable.forEach(function(e) { if (e.name) { var r = GUILD_ROSTER.find(function(x){return x.name===e.name;}); if (r) allPlayers[e.name] = r.cls; } });
+  analysis.dmgTaken.forEach(function(e) { var name = e.targetName || _rn(e.targetID, A); if (name) { var r = GUILD_ROSTER.find(function(x){return x.name===name;}); if (r) allPlayers[name] = r.cls; } });
   Object.keys(allPlayers).forEach(function(name) {
     var score = 100, deductions = [];
     var death = analysis.deathRecaps.find(function(d) { return d.player === name; });
@@ -9432,34 +9456,29 @@ function scorePlayersForFight(analysis) {
 }
 
 function buildTimeline(analysis) {
-  var events = [];
-  var fightStart = analysis.fight.startTime || 0;
-  var mech = analysis.mechanics, A = analysis.actors;
+  var events = [], fightStart = analysis.fight.startTime || 0, mech = analysis.mechanics, A = analysis.actors;
   analysis.bossCasts.forEach(function(e) {
-    if (!e.ability || !e.ability.name) return;
+    var abName = _abn(e); if (abName === 'Unknown') return;
     var isKey = false;
-    if (mech.avoidable) mech.avoidable.forEach(function(a) { if (a.name === e.ability.name) isKey = true; });
-    if (mech.interrupts) mech.interrupts.forEach(function(a) { if (a.name === e.ability.name) isKey = true; });
-    events.push({ time: (e.timestamp || 0) - fightStart, type: 'boss_cast', name: e.ability.name, isKey: isKey, color: isKey ? '#ff2244' : '#ff8800' });
+    if (mech.avoidable) mech.avoidable.forEach(function(a) { if (a.name === abName) isKey = true; });
+    if (mech.interrupts) mech.interrupts.forEach(function(a) { if (a.name === abName) isKey = true; });
+    events.push({ time: (e.timestamp || 0) - fightStart, type: 'boss_cast', name: abName, isKey: isKey, color: isKey ? '#ff2244' : '#ff8800' });
   });
   analysis.deaths.forEach(function(d) {
-    var pName = d.targetName || _an(d.targetID, A) || d.name || '?';
+    var pName = d.targetName || _rn(d.targetID, A) || d.name || '?';
     events.push({ time: (d.timestamp || 0) - fightStart, type: 'death', name: pName + ' \u2620', player: pName, color: '#ff2244' });
   });
   analysis.interrupts.forEach(function(e) {
-    var src = e.sourceName || _an(e.sourceID, A) || '?';
-    var ab = (e.ability && e.ability.name) || '?';
-    events.push({ time: (e.timestamp || 0) - fightStart, type: 'interrupt', name: src + ' kicked ' + ab, color: '#22cc66' });
+    var src = e.sourceName || _rn(e.sourceID, A) || '?';
+    events.push({ time: (e.timestamp || 0) - fightStart, type: 'interrupt', name: src + ' kicked ' + _abn(e), color: '#22cc66' });
   });
   analysis.dispels.forEach(function(e) {
-    var src = e.sourceName || _an(e.sourceID, A) || '?';
-    var ab = (e.ability && e.ability.name) || '?';
-    events.push({ time: (e.timestamp || 0) - fightStart, type: 'dispel', name: src + ' dispelled ' + ab, color: '#a855f7' });
+    var src = e.sourceName || _rn(e.sourceID, A) || '?';
+    events.push({ time: (e.timestamp || 0) - fightStart, type: 'dispel', name: src + ' dispelled ' + _abn(e), color: '#a855f7' });
   });
   events.sort(function(a, b) { return a.time - b.time; });
   return events;
 }
-
 // ─── WIPE AUTOPSY UI ───
 function openWipeAutopsy(reportCode, fightId, bossName) {
   if (!reportCode || !fightId) { toast('No report data for this pull'); return; }
