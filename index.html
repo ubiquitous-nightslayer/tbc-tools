@@ -9553,6 +9553,125 @@ function renderAutopsyOverview(r) {
   var scoreColor = avgScore >= 80 ? '#ffd700' : (avgScore >= 60 ? 'var(--neon-green)' : (avgScore >= 40 ? 'var(--neon-orange)' : '#aa3344'));
   h += '<div style="text-align:center;padding:10px;border:1px solid '+scoreColor+'"><div style="font-size:20px;font-weight:900;color:'+scoreColor+'">' + avgScore + '</div><div style="font-size:9px;color:#666">MECH SCORE</div></div>';
   h += '</div>';
+  
+  // ─── CAUSAL CHAIN ANALYSIS ───
+  if (r.deathRecaps.length) {
+    h += '<div style="margin-bottom:14px;padding:12px;border:2px solid var(--neon-red);background:rgba(255,34,68,0.03)">';
+    h += '<div style="font-family:Orbitron,sans-serif;font-size:12px;color:var(--neon-red);letter-spacing:2px;margin-bottom:10px">' + (r.isKill ? '\ud83d\udcca DEATH ANALYSIS' : '\ud83d\udd0d WIPE ROOT CAUSE ANALYSIS') + '</div>';
+    
+    var fightStart = r.fight.startTime || 0;
+    var firstDeath = r.deathRecaps[0];
+    var firstDeathTime = firstDeath.time + fightStart;
+    
+    // Find avoidable damage near first death
+    var avoidNear = r.dmgTaken.filter(function(e) {
+      return AVOIDABLE_ABILITIES[_abn(e)] && e.timestamp >= firstDeathTime - 15000 && e.timestamp <= firstDeathTime + 2000;
+    });
+    var avoidByPlayer = {};
+    avoidNear.forEach(function(e) {
+      var n = _tgt(e);
+      if (!avoidByPlayer[n]) avoidByPlayer[n] = {total: 0, abilities: {}};
+      avoidByPlayer[n].total += (e.amount || 0);
+      var ab = _abn(e);
+      avoidByPlayer[n].abilities[ab] = (avoidByPlayer[n].abilities[ab] || 0) + (e.amount || 0);
+    });
+    
+    // Who healed the first dead player?
+    var healersFor1st = {};
+    r.healing.filter(function(e) {
+      return _tgt(e) === firstDeath.player && e.timestamp >= firstDeathTime - 10000 && e.timestamp <= firstDeathTime;
+    }).forEach(function(e) {
+      var hn = _src(e);
+      if (!healersFor1st[hn]) healersFor1st[hn] = 0;
+      healersFor1st[hn] += e.amount || 0;
+    });
+    
+    // Where were healers spending their time?
+    var healerAlloc = {};
+    Object.keys(healersFor1st).forEach(function(hn) {
+      healerAlloc[hn] = {};
+      r.healing.filter(function(e) {
+        return _src(e) === hn && e.timestamp >= firstDeathTime - 10000 && e.timestamp <= firstDeathTime;
+      }).forEach(function(e) {
+        var t = _tgt(e);
+        if (!healerAlloc[hn][t]) healerAlloc[hn][t] = 0;
+        healerAlloc[hn][t] += e.amount || 0;
+      });
+    });
+    
+    // Build narrative
+    // Step 1: Who took avoidable damage?
+    var avoidNames = Object.keys(avoidByPlayer);
+    if (avoidNames.length) {
+      h += '<div style="margin-bottom:8px;padding:8px;border-left:3px solid var(--neon-orange);background:rgba(255,136,0,0.03)">';
+      h += '<div style="color:var(--neon-orange);font-weight:900;font-size:11px;margin-bottom:4px">STEP 1: AVOIDABLE DAMAGE TAKEN</div>';
+      avoidNames.forEach(function(pn) {
+        var cc2 = clsColorFor((function(){var rr=GUILD_ROSTER.find(function(x){return x.name===pn;});return rr?rr.cls:'';})());
+        var abList = Object.keys(avoidByPlayer[pn].abilities).map(function(ab){return ab+' ('+fmtK(avoidByPlayer[pn].abilities[ab])+')';}).join(', ');
+        h += '<div style="font-size:11px"><span style="color:'+cc2+';font-weight:900">' + pn + '</span> took <span style="color:var(--neon-red)">' + fmtK(avoidByPlayer[pn].total) + '</span> avoidable damage from ' + abList + '</div>';
+      });
+      h += '</div>';
+      
+      // Step 2: Did this pull healers away?
+      var distractedHealers = [];
+      Object.keys(healerAlloc).forEach(function(hn) {
+        var alloc = healerAlloc[hn];
+        var totalToAvoid = 0;
+        avoidNames.forEach(function(an) { totalToAvoid += alloc[an] || 0; });
+        var totalAll = 0;
+        Object.keys(alloc).forEach(function(t) { totalAll += alloc[t]; });
+        if (totalToAvoid > 0 && totalAll > 0) {
+          var pct = Math.round(totalToAvoid / totalAll * 100);
+          if (pct > 10) distractedHealers.push({name: hn, pct: pct, toAvoid: totalToAvoid, total: totalAll});
+        }
+      });
+      
+      if (distractedHealers.length) {
+        h += '<div style="margin-bottom:8px;padding:8px;border-left:3px solid #a855f7;background:rgba(168,85,247,0.03)">';
+        h += '<div style="color:#a855f7;font-weight:900;font-size:11px;margin-bottom:4px">STEP 2: HEALER DISTRACTION</div>';
+        distractedHealers.forEach(function(dh) {
+          h += '<div style="font-size:11px"><span style="color:var(--neon-green);font-weight:900">' + dh.name + '</span> spent <span style="color:var(--neon-orange)">' + dh.pct + '%</span> of healing (' + fmtK(dh.toAvoid) + '/' + fmtK(dh.total) + ') on players who took avoidable damage</div>';
+        });
+        h += '</div>';
+      }
+    }
+    
+    // Step 3: First death
+    h += '<div style="margin-bottom:8px;padding:8px;border-left:3px solid var(--neon-red);background:rgba(255,34,68,0.03)">';
+    h += '<div style="color:var(--neon-red);font-weight:900;font-size:11px;margin-bottom:4px">STEP ' + (avoidNames.length ? '3' : '1') + ': FIRST DEATH</div>';
+    var cc1 = clsColorFor(firstDeath.cls);
+    h += '<div style="font-size:11px"><span style="color:'+cc1+';font-weight:900">' + firstDeath.player + '</span> died at <span style="color:var(--neon-cyan)">' + formatMs(firstDeath.time) + '</span> to <span style="color:var(--neon-orange)">' + firstDeath.killingAbility + '</span> from ' + firstDeath.killerName;
+    h += ' \u2014 took <span style="color:var(--neon-red)">' + fmtK(firstDeath.totalDmgLast5s) + '</span> dmg, received <span style="color:var(--neon-green)">' + fmtK(firstDeath.totalHealLast5s) + '</span> healing';
+    if (firstDeath.totalDmgLast5s > 0 && firstDeath.totalHealLast5s < firstDeath.totalDmgLast5s * 0.4) {
+      h += ' <span style="color:#aa3344;font-weight:900">(\u26a0 UNDERHEALED)</span>';
+    }
+    h += '</div>';
+    // Show who was healing them
+    var hNames = Object.keys(healersFor1st).sort(function(a,b){return healersFor1st[b]-healersFor1st[a];});
+    if (hNames.length) {
+      h += '<div style="font-size:10px;color:var(--text-sub);margin-top:2px">Healed by: ';
+      hNames.forEach(function(hn) { h += '<span style="color:var(--neon-green)">' + hn + '</span> (' + fmtK(healersFor1st[hn]) + ') '; });
+      h += '</div>';
+    } else {
+      h += '<div style="font-size:10px;color:#aa3344;margin-top:2px">\u26a0 No healing received in last 10s</div>';
+    }
+    h += '</div>';
+    
+    // Step 4: Cascade
+    if (r.deathRecaps.length > 1) {
+      h += '<div style="padding:8px;border-left:3px solid #ff2244;background:rgba(255,34,68,0.03)">';
+      h += '<div style="color:#ff2244;font-weight:900;font-size:11px;margin-bottom:4px">CASCADE \u2014 ' + (r.deathRecaps.length - 1) + ' deaths followed in ' + ((r.deathRecaps[r.deathRecaps.length-1].time - firstDeath.time)/1000).toFixed(1) + 's</div>';
+      for (var di = 1; di < r.deathRecaps.length; di++) {
+        var dd = r.deathRecaps[di];
+        var dcc = clsColorFor(dd.cls);
+        h += '<div style="font-size:11px;padding:1px 0"><span style="color:var(--neon-cyan)">' + formatMs(dd.time) + '</span> <span style="color:'+dcc+';font-weight:900">' + dd.player + '</span> \u2192 ' + dd.killingAbility + (dd.isAvoidable ? ' <span style="color:#aa3344">\u26a0</span>' : '') + '</div>';
+      }
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+  
+  // Death order (simplified since causal chain above has the detail)
   if (r.deathRecaps.length) {
     h += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
     h += '<div style="font-weight:900;color:var(--neon-red);margin-bottom:6px">\u2620 DEATH ORDER</div>';
@@ -9569,14 +9688,9 @@ function renderAutopsyOverview(r) {
       h += '</div>';
     });
     h += '</div>';
-    if (r.deathRecaps.length >= 3) {
-      var span = r.deathRecaps[2].time - r.deathRecaps[0].time;
-      if (span < 5000) {
-        h += '<div style="padding:10px;border:1px solid var(--neon-red);background:rgba(255,34,68,0.05);margin-bottom:12px">';
-        h += '<div style="color:var(--neon-red);font-weight:900">\u26a0 RAPID DEATH CHAIN \u2014 3 deaths in ' + (span/1000).toFixed(1) + 's</div></div>';
-      }
-    }
   }
+  
+  // Avoidable damage
   if (r.mechAnalysis.avoidable.length) {
     h += '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a44">';
     h += '<div style="font-weight:900;color:var(--neon-orange);margin-bottom:6px">\u26a0 AVOIDABLE DAMAGE</div>';
@@ -9598,26 +9712,106 @@ function renderAutopsyOverview(r) {
 function renderAutopsyDeaths(r) {
   var h = '';
   if (!r.deathRecaps.length) return '<div style="text-align:center;padding:30px;color:var(--text-sub)">No deaths \u2014 clean fight!</div>';
+  var fightStart = r.fight.startTime || 0;
+  var defensiveNames = ['Healthstone','Health Potion','Super Healing Potion','Major Healthstone','Divine Shield','Lay on Hands','Barkskin','Evasion','Shield Wall','Last Stand','Ice Block','Divine Protection','Blessing of Protection','Ironshield','Lifeblood','Gift of the Naaru'];
+  
   r.deathRecaps.forEach(function(d, i) {
     var cc = clsColorFor(d.cls);
-    h += '<div style="margin-bottom:14px;border:1px solid '+(d.isAvoidable?'#aa3344':'#2a2a44')+'">';
-    h += '<div style="padding:8px 12px;border-bottom:1px solid #2a2a44;display:flex;justify-content:space-between;align-items:center">';
-    h += '<div><span style="color:var(--neon-red);font-weight:900;margin-right:8px">#' + (i+1) + '</span>';
-    h += '<span style="color:'+cc+';font-weight:900;font-size:14px">' + d.player + '</span></div>';
-    h += '<span style="color:var(--neon-cyan)">' + formatMs(d.time) + '</span></div>';
-    h += '<div style="padding:8px 12px;background:#0a0a14">';
-    h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:8px">';
-    h += '<div><div style="font-size:9px;color:#555">KILLING BLOW</div><div style="color:var(--neon-orange);font-weight:900">' + d.killingAbility + '</div><div style="font-size:10px;color:#555">from ' + d.killerName + '</div></div>';
-    h += '<div><div style="font-size:9px;color:#555">DMG LAST 5s</div><div style="color:var(--neon-red);font-weight:900">' + fmtK(d.totalDmgLast5s) + '</div></div>';
-    h += '<div><div style="font-size:9px;color:#555">HEAL LAST 5s</div><div style="color:var(--neon-green);font-weight:900">' + fmtK(d.totalHealLast5s) + '</div>';
-    if (d.totalDmgLast5s > 0 && d.totalHealLast5s < d.totalDmgLast5s * 0.3) h += '<div style="font-size:9px;color:#aa3344">\u26a0 Underhealed</div>';
+    var deathTimestamp = d.time + fightStart;
+    
+    h += '<div style="margin-bottom:14px;border:1px solid '+(d.isAvoidable?'#aa3344':'#2a2a44')+';background:'+(d.isAvoidable?'rgba(170,51,68,0.03)':'transparent')+'">';
+    // Header
+    h += '<div style="padding:8px 12px;border-bottom:1px solid #2a2a44;display:flex;justify-content:space-between;align-items:center;background:#0c0c18">';
+    h += '<div><span style="color:var(--neon-red);font-weight:900;font-size:16px;margin-right:8px">#' + (i+1) + '</span>';
+    h += '<span style="color:'+cc+';font-weight:900;font-size:14px">' + d.player + '</span>';
+    h += ' <span style="color:#555;font-size:10px">' + d.cls + '</span></div>';
+    h += '<span style="color:var(--neon-cyan);font-family:Orbitron,sans-serif;font-size:14px">' + formatMs(d.time) + '</span></div>';
+    
+    h += '<div style="padding:10px 12px;background:#0a0a14">';
+    // Row 1: Kill info + Damage + Healing
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:10px">';
+    h += '<div><div style="font-size:9px;color:#555;letter-spacing:1px">KILLING BLOW</div><div style="color:var(--neon-orange);font-weight:900;font-size:13px">' + d.killingAbility + '</div><div style="font-size:10px;color:#555">from ' + d.killerName + '</div>';
+    if (d.isAvoidable) h += '<div style="font-size:10px;color:#aa3344;font-weight:900">\u26a0 AVOIDABLE</div>';
+    if (d.overkill > 0) h += '<div style="font-size:10px;color:#555">' + fmtK(d.overkill) + ' overkill</div>';
+    h += '</div>';
+    h += '<div><div style="font-size:9px;color:#555;letter-spacing:1px">DMG LAST 5s</div><div style="color:var(--neon-red);font-weight:900;font-size:18px">' + fmtK(d.totalDmgLast5s) + '</div></div>';
+    h += '<div><div style="font-size:9px;color:#555;letter-spacing:1px">HEAL LAST 5s</div><div style="color:var(--neon-green);font-weight:900;font-size:18px">' + fmtK(d.totalHealLast5s) + '</div>';
+    if (d.totalDmgLast5s > 0 && d.totalHealLast5s < d.totalDmgLast5s * 0.3) h += '<div style="font-size:9px;color:#aa3344;font-weight:900">\u26a0 SEVERELY UNDERHEALED</div>';
+    else if (d.totalDmgLast5s > 0 && d.totalHealLast5s < d.totalDmgLast5s * 0.5) h += '<div style="font-size:9px;color:var(--neon-orange)">\u26a0 Underhealed</div>';
     h += '</div></div>';
+    
+    // Row 2: Who healed them + Personal cooldowns
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">';
+    
+    // Healers panel
+    var healersForThis = {};
+    r.healing.filter(function(e) {
+      return _tgt(e) === d.player && e.timestamp >= deathTimestamp - 10000 && e.timestamp <= deathTimestamp;
+    }).forEach(function(e) {
+      var hn = _src(e);
+      if (!healersForThis[hn]) healersForThis[hn] = {total: 0, spells: {}};
+      healersForThis[hn].total += e.amount || 0;
+      var sp = _abn(e);
+      healersForThis[hn].spells[sp] = (healersForThis[hn].spells[sp] || 0) + (e.amount || 0);
+    });
+    h += '<div style="padding:6px;border:1px solid #1a1a34">';
+    h += '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:4px">\ud83d\udc9a HEALERS (last 10s)</div>';
+    var hNames2 = Object.keys(healersForThis).sort(function(a,b){return healersForThis[b].total-healersForThis[a].total;});
+    if (hNames2.length) {
+      hNames2.forEach(function(hn) {
+        var hc = clsColorFor((function(){var rr=GUILD_ROSTER.find(function(x){return x.name===hn;});return rr?rr.cls:'';})());
+        var spells = Object.keys(healersForThis[hn].spells).map(function(s){return s;}).join(', ');
+        h += '<div style="display:flex;justify-content:space-between;font-size:10px;padding:1px 0"><span style="color:'+hc+';font-weight:700">' + hn + ' <span style="color:#555;font-weight:400">(' + spells + ')</span></span><span style="color:var(--neon-green);font-weight:900">' + fmtK(healersForThis[hn].total) + '</span></div>';
+      });
+    } else {
+      h += '<div style="font-size:10px;color:#aa3344">\u274c No healing received</div>';
+    }
+    h += '</div>';
+    
+    // Personal cooldowns + consumables panel
+    var usedDefensives = [];
+    var usedConsumables = [];
+    if (r.buffEvents) {
+      r.buffEvents.filter(function(e) {
+        return _tgt(e) === d.player && e.timestamp >= deathTimestamp - 15000 && e.timestamp <= deathTimestamp;
+      }).forEach(function(e) {
+        var bn = _abn(e);
+        if (defensiveNames.some(function(dn) { return bn === dn || bn.indexOf(dn) !== -1; })) {
+          if (usedDefensives.indexOf(bn) === -1) usedDefensives.push(bn);
+        }
+        if (CONS_POT_BUFFS && CONS_POT_BUFFS.some(function(f){return bn === f;})) {
+          if (usedConsumables.indexOf(bn) === -1) usedConsumables.push(bn);
+        }
+        if (bn.indexOf('Healthstone') !== -1 && usedConsumables.indexOf('Healthstone') === -1) usedConsumables.push('Healthstone');
+      });
+    }
+    h += '<div style="padding:6px;border:1px solid #1a1a34">';
+    h += '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:4px">\ud83d\udee1 PERSONAL RESPONSE</div>';
+    // Consumable check from audit
+    var cons = r.consumableAudit[d.player];
+    if (cons) {
+      h += '<div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;margin-bottom:3px">';
+      h += '<span style="color:'+(cons.flask?'var(--neon-green)':'#aa3344')+'">' + (cons.flask ? '\u2705' : '\u274c') + ' Flask</span>';
+      h += '<span style="color:'+(cons.food?'var(--neon-green)':'#aa3344')+'">' + (cons.food ? '\u2705' : '\u274c') + ' Food</span>';
+      h += '<span style="color:'+(cons.pot?'var(--neon-green)':'#555')+'">' + (cons.pot ? '\u2705 Pot' : '\u2014 Pot') + '</span>';
+      h += '<span style="color:'+(cons.healthstone?'var(--neon-green)':'#555')+'">' + (cons.healthstone ? '\u2705 Stone' : '\u2014 Stone') + '</span>';
+      h += '</div>';
+    }
+    if (usedDefensives.length) {
+      h += '<div style="font-size:10px;color:var(--neon-green)">\u2705 Used: ' + usedDefensives.join(', ') + '</div>';
+    } else {
+      h += '<div style="font-size:10px;color:#aa3344">\u274c No defensives used</div>';
+    }
+    h += '</div>';
+    h += '</div>';
+    
+    // Row 3: Last damage events
     if (d.last5Hits.length) {
-      h += '<div style="font-size:9px;color:#555;margin-bottom:4px">LAST DAMAGE EVENTS</div>';
+      h += '<div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:4px">\u2694 LAST DAMAGE EVENTS</div>';
       h += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="color:#444"><th style="text-align:left;padding:2px">TIME</th><th style="text-align:left;padding:2px">ABILITY</th><th style="text-align:left;padding:2px">SOURCE</th><th style="text-align:right;padding:2px">DMG</th><th style="text-align:right;padding:2px">ABSORB</th><th style="text-align:right;padding:2px">OVERKILL</th></tr></thead><tbody>';
       d.last5Hits.forEach(function(hit) {
         h += '<tr style="border-bottom:1px solid #12122a"><td style="padding:2px;color:var(--neon-cyan)">' + formatMs(hit.timestamp) + '</td>';
-        h += '<td style="padding:2px;color:'+(hit.isAvoidable?'#aa3344':'var(--text-bright)')+'">' + hit.ability + (hit.isAvoidable?' \u26a0':'') + '</td>';
+        h += '<td style="padding:2px;color:'+(hit.isAvoidable?'#aa3344':'var(--text-bright)')+';font-weight:'+(hit.isAvoidable?'900':'400')+'">' + hit.ability + (hit.isAvoidable?' \u26a0':'') + '</td>';
         h += '<td style="padding:2px;color:#888">' + hit.source + '</td>';
         h += '<td style="padding:2px;text-align:right;color:var(--neon-red);font-weight:900">' + fmtK(hit.amount) + '</td>';
         h += '<td style="padding:2px;text-align:right;color:#555">' + (hit.absorbed ? fmtK(hit.absorbed) : '-') + '</td>';
@@ -9629,6 +9823,7 @@ function renderAutopsyDeaths(r) {
   });
   return h;
 }
+
 
 function renderAutopsyMechanics(r) {
   var h = '', mech = r.mechanics;
